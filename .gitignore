@@ -1,33 +1,22 @@
-# .gitignore for Grails 1.2 and 1.3
-# Although this should work for most versions of grails, it is
-# suggested that you use the "grails integrate-with --git" command
-# to generate your .gitignore file.
+user.gradle
+.gradle/
+target/
+build/
+out/
 
-# web application files
-/web-app/WEB-INF/classes
+*.DS_Store
+*.class
+*.swp
+*~
 
-# default HSQL database files for production mode
-/prodDb.*
+.idea
+*.iml
+*.ipr
+*.iws
+.shelf
 
-# general HSQL database files
-*Db.properties
-*Db.script
+.settings/
+.classpath
+.project
+bin/
 
-# logs
-/stacktrace.log
-/test/reports
-/logs
-
-# project release file
-/*.war
-
-# plugin release files
-/*.zip
-/plugin.xml
-
-# older plugin install locations
-/plugins
-/web-app/plugins
-
-# "temporary" build files
-/target
