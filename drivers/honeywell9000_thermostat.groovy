@@ -25,125 +25,123 @@ preferences {
 
 
 /**
- * Thermostat::off
+ * Thermostat::off - set thermostat mde to 'off'
  */
 def off() {
-    logInfo'Thermostat::off'
+    if(logDebug) log.debug "${myLabel}  Thermostat::off"
+    setThermostatMode('off')
 }
-
 /**
- * Thermostat::cool
+ * Thermostat::cool - set thermostat mde to 'cool'
  */
 def cool() {
-    logInfo'Thermostat::cool'
+    if(logDebug) log.debug "${myLabel}  Thermostat::cool"
+    setThermostatMode('cool')
 }
-
 /**
- * Thermostat::heat
+ * Thermostat::heat - set thermostat mde to 'heat'
  */
 def heat() {
-    logInfo'Thermostat::heat'
+    if(logDebug) log.debug "${myLabel}  Thermostat::heat"
+    setThermostatMode('heat')
 }
-
 /**
- * Thermostat::emergencyHeat
+ * Thermostat::emergencyHeat - set thermostat mde to 'emergency heat'
  */
 def emergencyHeat() {
-    logInfo'Thermostat::emergencyHeat'
+    if(logDebug) log.debug "${myLabel}  Thermostat::emergencyHeat"
+    setThermostatMode('emergency heat')
 }
-
 /**
- * Thermostat::auto
+ * Thermostat::auto - set thermostat mde to 'auto'
  */
 def auto() {
-    logInfo'Thermostat::auto'
+    if(logDebug) log.debug "${myLabel}  Thermostat::auto"
+    setThermostatMode('auto')
 }
 
 /**
- * Thermostat::fanAuto
+ * Thermostat::fanAuto - set fan mode to 'auto'
  */
 def fanAuto() {
-    logInfo'Thermostat::fanAuto'
+    if(logDebug) log.debug "${myLabel}  Thermostat::fanAuto"
+    setThermostatFanMode('auto')
 }
-
 /**
- * Thermostat::fanCirculate
+ * Thermostat::fanCirculate - set fan mode to 'circulate'
  */
 def fanCirculate() {
-    logInfo'Thermostat::fanCirculate'
+    if(logDebug) log.debug "${myLabel}  Thermostat::fanCirculate"
+    setThermostatFanMode('circulate')
 }
-
 /**
- * Thermostat::fanOn
+ * Thermostat::fanOn - set fan mode to 'on'
  */
 def fanOn() {
-    logInfo'Thermostat::fanOn'
+    if(logDebug) log.debug "${myLabel}  Thermostat::fanOn"
+    setThermostatFanMode('on')
 }
 
 /**
  * Thermostat::setCoolingSetpoint
  * @param temp - cooling setpoint in degrees F/C
  */
-def setCoolingSetpoint(temp) {
-    logInfo"Thermostat::setCoolingSetpoint - temperature: ${temp}"
+def setCoolingSetpoint(java.math.BigDecimal temperature) {
+    if(logInfo) log.info "${myLabel}  - temperature: ${temperature}"
 }
 
 /**
  * Thermostat::setHeatingSetpoint
  * @param temp - heating setpoint in degrees F/C
  */
-def setHeatingSetpoint(temp) {
-    logInfo"Thermostat::setHeatingSetpoint - temperature: ${temp}"
+def setHeatingSetpoint(java.math.BigDecimal temperature) {
+    if(logInfo) log.info "${myLabel}  - temperature: ${temperature}"
 }
 
 /**
  * Thermostat::setSchedule
- * @param schedule - schedule to set (json object)
+ * @param schedule - schedule to set (json string)
  */
-def setSchedule(schedule) {
-    logInfo"Thermostat::setSchedule - schedule: ${schedule}"
+def setSchedule(String schedule) {
+    if(logInfo) log.info "${myLabel}  - schedule: ${schedule}"
 }
 
 /**
  * Thermostat::fanmode
- * @param mode - fan mode to set (enum)
+ * @param mode - fan mode to set: 'on', 'circulate', 'auto'
  */
-def setThermostatFanMode(mode) {
-    logInfo"Thermostat::setThermostatFanMode - mode: ${mode}"
+def setThermostatFanMode(String mode) {
+    if(logInfo) log.info "${myLabel}  - mode: ${mode}"
 }
 
 /**
  * Thermostat::setThermostatMode
- * @param mode - thermostat mode to set (enum)
+ * @param mode - thermostat mode to set: 'off', 'cool', 'heat', 'emergency heat', 'auto'
  */
-def setThermostatMode(mode) {
-    logInfo"Thermostat::setThermostatMode - mode: ${mode}"
+def setThermostatMode(String mode) {
+    if(logInfo) log.info "${myLabel}  - mode: ${mode}"
 }
 
 
-
+/**
+ * Device::installed - called when the device is first created
+ */
 def installed() {
-    logInfo 'virtual thermostat created'
+    def myLabel = device.label ? device.label : device.name
+    device.updateSetting('myLabel', [value: myLabel, type: "text"])
+    if(logInfo) log.info "${myLabel}  virtual thermostat created"
 }
-
+/**
+ * Device::uninstalled - called when the device is removed
+ */
 def uninstalled() {
-    logInfo 'virtual thermostat removed'
+    if(logInfo) log.info "${myLabel}  virtual thermostat removed"
 }
-
+/**
+ * Device::updated - called when the preferences of a device are updated
+ */
 def updated() {
-    logInfo 'virtual thermostat updated'
-}
-
-def logInfo(String msg) {
-    if(logInfo) {
-        def label = device.label ? device.label : device.name
-        log.info "${label} ${msg}"
-    }
-}
-
-def logDebug(String msg) {
-    if(logDebug) {
-        def label = device.label ? device.label : device.name
-        log.debug "${label} ${msg}"
-    }
+    def myLabel = device.label ? device.label : device.name
+    device.updateSetting('myLabel', [value: myLabel, type: "text"])
+    if(logInfo) log.info "${myLabel}  virtual thermostat updated"
 }
