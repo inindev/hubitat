@@ -36,6 +36,9 @@ metadata {
 }
 
 preferences {
+    input name: 'userEmail', type: 'text', title: 'Username', description: 'Honeywell email', required: true
+    input name: 'userAuth', type: 'password', title: 'Password', description: 'Honeywell password', required: true
+
     input name: 'logInfo', type: 'bool', title: 'Enable info logging', defaultValue: true
     input name: 'logDebug', type: 'bool', title: 'Enable debug logging', defaultValue: false
 }
@@ -168,4 +171,75 @@ def updated() {
     def myLabel = device.label ? device.label : device.name
     device.updateSetting('myLabel', [value: myLabel, type: "text"])
     if(logInfo) log.info "${myLabel}  virtual thermostat updated"
+
+    if(userAuth != '+-+-+-+-+-+-+') {
+        device.updateSetting('userAuthCrypt', encrypt(userAuth))
+        device.updateSetting('userAuth', [value: '+-+-+-+-+-+-+', type: "password"])
+    }
+}
+
+
+// cookie management
+@groovy.transform.Field Map cookies = [:]
+
+def getCookieString() {
+    StringBuffer cookieBuf = new StringBuffer()
+    cookies.each() { name, cookie ->
+        def expire = cookie[2]
+        if ((expire > -1) && expire < now()){
+            cookies.remove(name)
+        } else {
+            if (cookieBuf.size() > 0) cookieBuf << '; '
+            cookieBuf << name
+            cookieBuf << '='
+            def val = cookie[1]
+            if(val) cookieBuf << val
+        }
+    }
+    return cookieBuf.toString()
+}
+
+def addCookie(String rawCookie) {
+    def cookie = parseCookie(rawCookie)
+    if (cookie) {
+        def name = cookie[0]
+        def expire = cookie[2]
+        log.debug "${myLabel}  found cookie - name: ${name}  exp: ${expire}"
+        if ((expire > -1) && expire < now()){
+            log.debug "${myLabel}  removing expired cookie - name: ${name}"
+            cookies.remove(name)
+        } else {
+            cookies[name] = cookie
+        }
+    }
+}
+
+def parseCookie(String rawCookie) {
+    String name = null
+    String value = null
+    long expire = -1
+
+    def rawCookieParams = rawCookie.split(';')
+    rawCookieParams.eachWithIndex { rawCookieParam, num ->
+        def kvp = rawCookieParam.split('=')
+        def key = kvp[0]?.trim()
+        def val = (kvp?.length > 1) ? kvp[1]?.trim() : null
+        if (num == 0) {
+            // first token
+            name = key
+            value = val
+        } else {
+            // subsequent tokens
+            if (val && key?.equalsIgnoreCase('expires')) {
+                try {
+                    expire = Date.parse(val)
+                } catch (ex) {
+                    log.error("${myLabel}  parse date: ${ex}")
+                }
+            }
+            // ignore other elements in this impl
+        }
+    }
+
+    return name ? [name, value, expire] : null
 }
