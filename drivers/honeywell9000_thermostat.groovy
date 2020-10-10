@@ -36,8 +36,8 @@ metadata {
 }
 
 preferences {
-    input name: 'userEmail', type: 'text', title: 'Username', description: 'Honeywell email', required: true
-    input name: 'userAuth', type: 'password', title: 'Password', description: 'Honeywell password', required: true
+    input name: 'userEmail', type: 'text', title: 'Honeywell email', required: true
+    input name: 'userAuth', type: 'text', title: 'Honeywell password', required: true
 
     input name: 'logInfo', type: 'bool', title: 'Enable info logging', defaultValue: true
     input name: 'logDebug', type: 'bool', title: 'Enable debug logging', defaultValue: false
@@ -172,74 +172,152 @@ def updated() {
     device.updateSetting('myLabel', [value: myLabel, type: "text"])
     if(logInfo) log.info "${myLabel}  virtual thermostat updated"
 
-    if(userAuth != '+-+-+-+-+-+-+') {
+    if(userAuth != '*************') {
         device.updateSetting('userAuthCrypt', encrypt(userAuth))
-        device.updateSetting('userAuth', [value: '+-+-+-+-+-+-+', type: "password"])
+        device.updateSetting('userAuth', '*************')
+        if(logInfo) log.info "${myLabel}  encrypted password updated"
     }
 }
 
 
 // cookie management
-@groovy.transform.Field Map cookies = [:]
 
-def getCookieString() {
+/**
+ * serializes the storedCookies persistence list to string suitable for a cookie request header
+ * note that expired cookies are removed from storedCookies persistence
+ */
+def serializeCookies() {
     StringBuffer cookieBuf = new StringBuffer()
-    cookies.each() { name, cookie ->
-        def expire = cookie[2]
-        if ((expire > -1) && expire < now()){
-            cookies.remove(name)
+    storedCookies.each() { cookie ->
+        if(isExpired(cookie)) {
+            cookies.remove(cookie)
         } else {
-            if (cookieBuf.size() > 0) cookieBuf << '; '
-            cookieBuf << name
-            cookieBuf << '='
-            def val = cookie[1]
-            if(val) cookieBuf << val
+            def nameVal = cookie.split(';').getAt(0).trim()
+            if(cookieBuf.size() > 0) cookieBuf << '; '
+            cookieBuf << nameVal
         }
     }
     return cookieBuf.toString()
 }
 
-def addCookie(String rawCookie) {
-    def cookie = parseCookie(rawCookie)
-    if (cookie) {
-        def name = cookie[0]
-        def expire = cookie[2]
-        log.debug "${myLabel}  found cookie - name: ${name}  exp: ${expire}"
-        if ((expire > -1) && expire < now()){
-            log.debug "${myLabel}  removing expired cookie - name: ${name}"
-            cookies.remove(name)
-        } else {
-            cookies[name] = cookie
+/**
+ * adds or updates the specified cookie in the storedCookies persistence list
+ * note that the cookie is removed ifit is expired
+ * @param  cookie: cookie to be updated
+ * @param  remove: remove cookie only
+ */
+def updateCookie(cookie, remove=false) {
+    def cookieName = cookie?.split('=')?.getAt(0)?.trim()
+    if(!cookieName) return
+
+    if(!storedCookies || !(storedCookies instanceof ArrayList)) storedCookies = []
+    def imax = storedCookies?.size()
+    for(int i=0; i<imax; i++) {
+        def storedCookie = storedCookies.getAt(i)
+        def storedCookieName = storedCookie.split('=').getAt(0).trim()
+        if(cookieName.equalsIgnoreCase(storedCookieName)) {
+            if(remove) {
+                log.debug "${myLabel}  removing stored cookie: ${storedCookieName}"
+                storedCookies.remove(i)
+            } else {
+                log.debug "${myLabel}  replacing stored cookie: ${storedCookieName}"
+                storedCookies[i] = cookie
+            }
+            device.updateSetting('storedCookies', storedCookies)
+            return
         }
+    }
+
+    if(!remove) {
+        storedCookies.add(cookie)
+        device.updateSetting('storedCookies', storedCookies)
     }
 }
 
-def parseCookie(String rawCookie) {
-    String name = null
-    String value = null
-    long expire = -1
+/**
+ * removes the specified cookie from the storedCookies persistence list
+ * @param  cookie: cookie to be removed
+ */
+def removeCookie(cookie) {
+    updateCookie(cookie, true)
+}
 
-    def rawCookieParams = rawCookie.split(';')
-    rawCookieParams.eachWithIndex { rawCookieParam, num ->
-        def kvp = rawCookieParam.split('=')
-        def key = kvp[0]?.trim()
-        def val = (kvp?.length > 1) ? kvp[1]?.trim() : null
-        if (num == 0) {
-            // first token
-            name = key
-            value = val
-        } else {
-            // subsequent tokens
-            if (val && key?.equalsIgnoreCase('expires')) {
+/**
+ * clears the persisted storedCookies variable
+ */
+def clearCookies() {
+    if(logDebug) log.debug "${myLabel}  clearCookies"
+    device.updateSetting('storedCookies', [])
+}
+
+/**
+ * parse epoch data from cookie param to determine ifit is expired
+ * @param  cookie: parsed cookie with expiration in unix epoch format
+ * @return true ifcookie is expired
+ */
+def isExpired(cookie) {
+    def tokens = cookie.split(';')
+    if(tokens.size() < 2) return false
+
+    def expires = 0
+    try {
+        def expStr = tokens.getAt(1).trim()
+        expires = Long.parseLong(expStr)
+        if(expires == -1) return false
+    } catch (ex) {
+        log.error("${myLabel}  parse date: ${ex}")
+    }
+    return expires < now()
+}
+
+/**
+ * process Set-Cookie headers
+ * cookies will be persisted in the parsedCookie list
+ * @param  cookie: raw cookie from Set-Cookie header
+ */
+def processCookie(String rawCookie) {
+    if(logDebug) log.debug "${myLabel}  processCookie"
+
+    def cookieMap = parseCookie(rawCookie)
+    if(!cookieMap) return;
+
+    def name = cookieMap.cookie.split('=').getAt(0).trim()
+    if(logDebug) log.debug "${myLabel}  found cookie - name: ${name}  exp: ${cookieMap.expires}"
+    if((cookieMap.expires > -1) && cookieMap.expires < now()) {
+        if(logDebug) log.debug "${myLabel}  removing expired cookie - name: ${name}"
+        removeCookie(cookieMap.cookie)
+    } else {
+        if(logDebug) log.debug "${myLabel}  adding cookie - name: ${name}"
+        updateCookie(cookieMap.cookie)
+    }
+}
+
+/**
+ * accepts a raw server cookie as sent from Set-Cookie header
+ * @param  cookie: raw cookie from Set-Cookie header
+ * @return  map containing the parsed cookie and expiration as a unix epoch long
+ */
+def parseCookie(String rawCookie) {
+    def rawCookieParams = rawCookie?.split(';')
+    def nameVal = rawCookieParams?.getAt(0)?.trim()
+    if(!nameVal) return null
+
+    def imax = rawCookieParams?.size()
+    for(int i=1; i<imax; i++) {
+        def kvp = rawCookieParams?.getAt(i)?.split('=')
+        def key = kvp?.getAt(0)?.trim()
+        if(key?.equalsIgnoreCase('expires')) {
+            def exp = 0
+            def val = (kvp?.size() > 1) ? kvp?.getAt(1)?.trim() : null
+            if(val) {
                 try {
-                    expire = Date.parse(val)
+                    exp = Date.parse(val)
                 } catch (ex) {
                     log.error("${myLabel}  parse date: ${ex}")
                 }
             }
-            // ignore other elements in this impl
+            return [cookie: "${nameVal};${expires}", expires: exp]
         }
     }
-
-    return name ? [name, value, expire] : null
+    return [cookie: nameVal, expires: -1]
 }
