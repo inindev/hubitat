@@ -1,0 +1,18 @@
+HTTP/1.1 200 OK
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+Content-Type: application/json; charset=utf-8
+Expires: -1
+Server: Microsoft-IIS/8.5
+ADRUM_0: g:8c903b5f-3022-4bcd-bdcd-8bf9694766ae
+ADRUM_1: n:honeywell-prod_766afc62-5011-416d-81c5-edf776be1cb7
+ADRUM_2: i:982638
+ADRUM_3: e:723
+Set-Cookie: .ASPXAUTH_TRUEHOME_AT=R8W9gOnN5J16_Uf65OYdTceYdZTEhBuCniXwBqW8CeyzZd6GoVuC3evnSgDf_seo_TfH5HnULew-qSCCO7tHqt04yr8H6X9mWEX0vTl54ZAp3OMuVC8Js_KH_0JRV2mbeNmShLwmlbwummWCdLFm_j3VvAhyGbpTcaUr7Y2yHAj6Uwc5SMls2GgayNMCsFvH_NYsZSAMpH-k_Zvo7G4Be6uc-oX2VcFDM8nM7A8oCtX2Tx1TscLeF99zfR2JRagmww7LNtf1d8CweZHOQygn2j-ivqQaG197wb3iCmA9cY-CbyNPNMzjPkZxIGxtB0A_nLDOyiLR-V3Ie9tCR_I6grH-5lmU8kNRk2IFXQaURG-Gw7Jbn6Qsps2O8UHY5ev4nE7fSgUi9WW0rCfke597yGTMieXv4sb9WAn78TIkicKTdENjmUXcQZK7nC2KSEf1yVYmAPF6xBmwsUsbUYJVLc4Q9-2GJ-f7hbfGee8-ebnWjQF6v9uYjBhUWh-7valZwe-0w_mdh0ezjrBNIrV_Ez-KuV7QCNSd1ZNdFEqKJtpbwfDiI1O-bVoWBiWTLUyXlHBH1hK9T0IJBge6qYdtEvEjQIeAz9mjYdzegAC11hwk6TwXCSzr_zZW9VkCeFrIcFXU9ZiuUEj0H0kYGFmRgwnf6PyEdIbsES3vQE1SVi0puPB0rA99Vo7yAO3_uDc9UYwHka; path=/; secure; HttpOnly
+X-XSS-Protection: 1; mode=block
+X-UA-Compatible: IE=edge
+Date: {now}
+Content-Length: 529
+Set-Cookie: NSC_NZUDD-443-WT=ffffffff505e5d4f58454a42445a378b5fcc1c5e4172;expires={now_p2m};path=/;secure;httponly
+
+[{"DeviceID":1234567,"IsLost":false,"GatewayIsLost":false,"DispTempAvailable":true,"DispUnits":"F","DispTemp":69,"IndoorHumiAvailable":true,"IndoorHumi":52,"GatewayUpgrading":false,"Alerts":[],"DemandResponseDatas":[],"EquipmentOutputStatus":0,"IsFanRunning":true},{"DeviceID":9876543,"IsLost":false,"GatewayIsLost":false,"DispTempAvailable":true,"DispUnits":"F","DispTemp":69,"IndoorHumiAvailable":true,"IndoorHumi":51,"GatewayUpgrading":false,"Alerts":[],"DemandResponseDatas":[],"EquipmentOutputStatus":0,"IsFanRunning":true}]
