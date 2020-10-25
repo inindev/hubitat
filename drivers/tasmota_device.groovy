@@ -35,8 +35,8 @@ metadata {
 
 preferences {
     if (isRootDevice()) {
-        input name: 'tasmotaIp', type: 'text', title: 'Tasmota IP Address <small>[:port]</small>'
-        input name: 'relayCount', type: 'enum', title: 'Number of Relays', description: '<small>(>1 creates child devices)</small>', options: ['1','2','3','4','5','6','7','8'], defaultValue: 1
+        input name: 'tasmotaIp', type: 'text', title: 'Tasmota IP Address', description: '<small><i style="opacity:0.7">device ip address[:port]</i></small>'
+        input name: 'relayCount', type: 'enum', title: 'Number of Relays', description: '<small><i style="opacity:0.7">(>1 creates child devices)</i></small>', options: ['1','2','3','4','5','6','7','8'], defaultValue: '1'
         input name: 'logInfo', type: 'bool', title: 'Enable info logging', defaultValue: true
         input name: 'logDebug', type: 'bool', title: 'Enable debug logging', defaultValue: false
     }
@@ -101,12 +101,15 @@ def updated() {
     if (!isRootDevice()) return // not callable from child device
     //log.info 'updated()'
 
+    // update device network id
     if (tasmotaIp) {
-        def mac1 = getMACFromIP(tasmotaIp)
-        def mac2 = device.getDeviceNetworkId()
-        if (mac1 != mac2) {
-            if (logInfo) log.info "updating Device Network Id to: ${mac1}"
-            device.setDeviceNetworkId(mac1)
+        def ip = tasmotaIp.tokenize(':').first()
+        //def mac = getMACFromIP(ip) // mac address nids do not work with multiple subnets
+        def ipHex = ip.tokenize('.').collect{intToHexStr(it as int)}.join()
+        def dnid = device.getDeviceNetworkId()
+        if (ipHex != dnid) {
+            if (logInfo) log.info "updating Device Network Id to: ${ipHex}"
+            device.setDeviceNetworkId(ipHex)
         }
     }
 
