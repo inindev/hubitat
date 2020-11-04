@@ -27,9 +27,11 @@ metadata {
             author: 'John Clark',
             importUrl: 'https://raw.githubusercontent.com/inindev/hubitat/main/drivers/tasmota_device.groovy',
     ) {
-        capability 'Actuator'
-        capability 'Sensor'
+        capability 'Bulb'
+        capability 'Light'
+        capability 'Outlet'
         capability 'Switch'
+//        capability 'ContactSensor'
     }
 }
 
@@ -115,25 +117,40 @@ def updated() {
 
     createSwitches(relayCount?.isInteger() ? relayCount.toInteger() : 1)
 }
+
 def parse(msg) {
     def json = parseLanMessage(msg)?.json
     if (!json) return
     if (logDebug) log.trace "parse - json: ${json}"
 
-    def devName = device.label ?: device.name
     json.each { key, val ->
         key = key.toLowerCase()
         if (logDebug) log.trace "evaluating  key: ${key}  val: ${val}"
+
+        // power state updated
         if (key.startsWith('power')) {
             def idxStr = key.substring(5)
             def idx = idxStr?.isInteger() ? idxStr.toInteger() : 1
             val = val.toLowerCase()
-            if (logInfo) log.info "json msg - switch ${idx} reported state '${val}'"
+            if (logInfo) log.info "switch ${idx} reported state '${val}'"
+
             def dev = getDevice(idx)
-            if (dev) dev.sendEvent(name: 'switch', value: val, descriptionText: "${val} command sent to ${devName}:power${idx}", isStateChange: true)
+            if (!dev) {
+                log.error "unable to find the device for index ${idx}"
+                return;
+            }
+
+            def devName = dev.label ?: dev.name
+            dev.sendEvent(name: 'switch', value: val, descriptionText: "${devName} (switch ${idx}) is now ${val}", isStateChange: true)
+            if (dev.hasCapability('ContactSensor')) {
+                def oc = val.equals('on') ? 'open' : 'closed'
+                dev.sendEvent(name: 'contact', value: oc, descriptionText: "${devName} (contact ${idx}) is now ${oc}", isStateChange: true)
+            }
         }
+
+        // wifi stats
         else if (key.equals('wifi')) {
-            if (logInfo) log.info "${devName} ${val}"
+            if (logInfo) log.info "${device.label ?: device.name} ${val}"
         }
     }
 }
@@ -203,20 +220,14 @@ def haveChildren() {
 def getDevice(int idx) {
     if (idx < 0) return null
 
-    def parent = getParent()
-    if (parent != null) {
-        // this is a child device, pass to parent
-        return parent.getDevice(idx)
+    // index zero is the root device
+    if (idx == 0) return device
+
+    def cd = getChildDevices()
+    if (cd.size() < 1) {
+        // no child devices, index 1 means root device
+        return (idx == 1) ? device : null
     }
 
-    // we are the root device, 0 means us
-    if (idx == 0) return this
-
-    if (!haveChildren()) {
-        // no children, #1 means us
-        return (idx == 1) ? this : null
-    }
-
-    return childDevices.find { it.getIndex() == idx }
+    return cd.find { it.getIndex() == idx }
 }
-
