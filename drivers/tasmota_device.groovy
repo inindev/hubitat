@@ -89,8 +89,52 @@ def setRelayState(num, state) {
 def httpCallback(resp, data) {
     if (resp.status != 200) {
         log.error "http response code ${resp.status}"
+    } else {
+        def json = resp.getJson()
+        if (logDebug) log.debug "http 200 ok - json: ${json}"
+
+        int nOff = 0
+        int nOn = 0
+        if ((json?.size() > 1) && haveChildren()) {
+            if (logDebug) log.trace 'processing composite device result'
+            json.each { key, val ->
+                key = key.toLowerCase()
+                val = val.toLowerCase()
+                if (logDebug) log.trace "evaluating  key: ${key}  val: ${val}"
+
+                if (val.equals('on')) {
+                    nOn++
+                } else {
+                    nOff++
+                }
+            }
+
+            def cOnOff
+            def cOpenClose
+            if ((nOff > 0) && (nOn == 0)) {
+                if (logDebug) log.debug "all child devices are off: ${nOff}, setting composite state to 'off'"
+                cOnOff = 'off'
+                cOpenClose = 'closed'
+            }
+            else if ((nOff == 0) && (nOn > 0)) {
+                if (logDebug) log.debug "all child devices are on: ${nOn}, setting composite state to 'on'"
+                cOnOff = 'on'
+                cOpenClose = 'open'
+            }
+            else {
+                if (logDebug) log.debug "some child devices are on: ${nOn}, some child devices are off: ${nOff}, setting composite state to 'mixed'"
+                cOnOff = 'mixed'
+                cOpenClose = 'mixed'
+            }
+
+            def devName = device.label ?: device.name
+            device.sendEvent(name: 'switch', value: cOnOff, descriptionText: "${devName} (switch 0) is now ${cOnOff}", isStateChange: true)
+            if (device.hasCapability('ContactSensor')) {
+                device.sendEvent(name: 'contact', value: cOpenClose, descriptionText: "${devName} (contact 0) is now ${cOpenClose}", isStateChange: true)
+            }
+
+        }
     }
-    else if (logDebug) log.debug "http 200 ok - json: ${resp.json}"
 }
 
 def installed() {
