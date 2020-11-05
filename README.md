@@ -11,9 +11,11 @@
 
 ### Tasmota Device Support
 
-The forked Tasmota repository (github.com/inindev/Tasmota) has been modified to call the Hubitat webhook on port 39501.  This integration was originally produced by Eric Maycock (erocm123) back in 2018: github.com/erocm123/Sonoff-Tasmota  This approach eliminates the need for an MQTT broker and also creates a near instantaneous update of the device state to the hub.
+The forked Tasmota repository (github.com/inindev/Tasmota) has been modified to call the Hubitat webhook on port 39501.  This integration was originally produced by Eric Maycock (erocm123) back in 2018: github.com/erocm123/Sonoff-Tasmota
 
-This is a derivative work that modernizes and simplifies Eric's integration strategy to better fit my own needs.  UDP auto-discovery has been removed, and the previous Hubitat drivers and application for Sonoff have been reduced to a single driver: github.com/inindev/hubitat/blob/main/drivers/tasmota_device.groovy
+Eric's approach eliminates the need for an MQTT broker and also creates a near instantaneous update of the device state to the hub.
+
+The code provided in this repository is a derivative work that modernizes and simplifies Eric's integration strategy to better fit my own needs.  UDP auto-discovery has been removed, and the previous Hubitat drivers and application for Sonoff have been reduced to a single driver: github.com/inindev/hubitat/blob/main/drivers/tasmota_device.groovy
 
 The Tasmota changes are also provided as a patchset to the 9.1.0 release: github.com/inindev/hubitat/blob/main/0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration.patch
 
