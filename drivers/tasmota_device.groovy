@@ -46,11 +46,9 @@ preferences {
 
 
 def off() {
-    if (logDebug) log.debug 'off command'
     setRelayState(getIndex(), false)
 }
 def on() {
-    if (logDebug) log.debug 'on command'
     setRelayState(getIndex(), true)
 }
 
@@ -64,13 +62,14 @@ def setRelayState(num, state) {
         return
     }
 
-    // we are the root device
+    if (logDebug) log.debug "setRelayState - num: ${num}  state: ${state}"
+
     if (!tasmotaIp) {
-        log.error 'the ip address of the tasmota switch has not been set'
+        log.error 'the ip address of the target tasmota device has not been set'
         return
     }
 
-    // as the root device, num==0 means "all relays" if we have children
+    // num==0 means "all relays" if we have children
     if (num < 1) {
         if (haveChildren()) {
             if (logInfo) log.info "turning all child relays ${state?'on':'off'}"
@@ -87,65 +86,19 @@ def setRelayState(num, state) {
     asynchttpGet(httpCallback, params)
 }
 def httpCallback(resp, data) {
-    if (resp.status != 200) {
-        log.error "http response code ${resp.status}"
+    if (resp.status == 200) {
+        if (logDebug) log.debug "http 200 ok - json: ${resp.json}"
     } else {
-        def json = resp.getJson()
-        if (logDebug) log.debug "http 200 ok - json: ${json}"
-
-        int nOff = 0
-        int nOn = 0
-        if ((json?.size() > 1) && haveChildren()) {
-            if (logDebug) log.trace 'processing composite device result'
-            json.each { key, val ->
-                key = key.toLowerCase()
-                val = val.toLowerCase()
-                if (logDebug) log.trace "evaluating  key: ${key}  val: ${val}"
-
-                if (val.equals('on')) {
-                    nOn++
-                } else {
-                    nOff++
-                }
-            }
-
-            def cOnOff
-            def cOpenClose
-            if ((nOff > 0) && (nOn == 0)) {
-                if (logDebug) log.debug "all child devices are off: ${nOff}, setting composite state to 'off'"
-                cOnOff = 'off'
-                cOpenClose = 'closed'
-            }
-            else if ((nOff == 0) && (nOn > 0)) {
-                if (logDebug) log.debug "all child devices are on: ${nOn}, setting composite state to 'on'"
-                cOnOff = 'on'
-                cOpenClose = 'open'
-            }
-            else {
-                if (logDebug) log.debug "some child devices are on: ${nOn}, some child devices are off: ${nOff}, setting composite state to 'mixed'"
-                cOnOff = 'mixed'
-                cOpenClose = 'mixed'
-            }
-
-            def devName = device.label ?: device.name
-            device.sendEvent(name: 'switch', value: cOnOff, descriptionText: "${devName} (switch 0) is now ${cOnOff}", isStateChange: true)
-            if (device.hasCapability('ContactSensor')) {
-                device.sendEvent(name: 'contact', value: cOpenClose, descriptionText: "${devName} (contact 0) is now ${cOpenClose}", isStateChange: true)
-            }
-
-        }
+        log.error "http response code ${resp.status}"
     }
 }
 
 def installed() {
-    //log.info 'installed()'
 }
 def uninstalled() {
-    //log.info 'uninstalled()'
 }
 def updated() {
     if (!isRootDevice()) return // not callable from child device
-    //log.info 'updated()'
 
     // update device network id
     if (tasmotaIp) {
@@ -230,6 +183,10 @@ def createSwitches(int num) {
         if (logInfo) log.info "creating child device: ${name}"
         addChildDevice('Tasmota Device', "${mac}-${i}", [name:name, label:label, isComponent:true])
     }
+
+    if (num > 1) {
+        device.sendEvent(name: 'switch', value: ' ', descriptionText: 'reset composite device state', isStateChange: true)
+    }
 }
 
 /**
@@ -265,13 +222,14 @@ def getDevice(int idx) {
     if (idx < 0) return null
 
     // index zero is the root device
-    if (idx == 0) return device
+    if (idx == 0) {
+        return getParent() ?: device
+    }
 
-    def cd = getChildDevices()
-    if (cd.size() < 1) {
+    def childDevices = getChildDevices()
+    if (childDevices.size() < 1) {
         // no child devices, index 1 means root device
         return (idx == 1) ? device : null
     }
-
-    return cd.find { it.getIndex() == idx }
+    return childDevices.find { it.getIndex() == idx }
 }
