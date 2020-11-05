@@ -22,7 +22,7 @@ The Tasmota changes are also provided as a patchset to the 9.1.0 release: github
 To use this patchset:
 
 ```
-curl https://raw.githubusercontent.com/inindev/hubitat/main/tasmota/0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration.patch
+wget https://raw.githubusercontent.com/inindev/hubitat/main/tasmota/0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration.patch
 
 git clone https://github.com/arendst/Tasmota.git
 cd Tasmota
