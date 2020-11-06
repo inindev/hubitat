@@ -3,7 +3,7 @@
  *
  *    Hubitat support for Tasmota based devices.
  *
- *    Copyright 2020 John Clark
+ *    Copyright 2020 John Clark (inindev)
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ metadata {
         capability 'Outlet'
         capability 'Switch'
 //        capability 'ContactSensor'
+//        capability "TemperatureMeasurement"
     }
 }
 
@@ -120,6 +121,7 @@ def parse(msg) {
     if (!json) return
     if (logDebug) log.trace "parse - json: ${json}"
 
+    def tempUnit
     json.each { key, val ->
         key = key.toLowerCase()
         if (logDebug) log.trace "evaluating  key: ${key}  val: ${val}"
@@ -133,7 +135,7 @@ def parse(msg) {
 
             def dev = getDevice(idx)
             if (!dev) {
-                log.error "unable to find the device for index ${idx}"
+                log.warn "unable to find the device for index ${idx}"
                 return;
             }
 
@@ -145,9 +147,25 @@ def parse(msg) {
             }
         }
 
+        // temperature unit
+        else if (key.equals('tempunit')) {
+            tempUnit = val
+        }
+        // temperature
+        else if (key.equals('ds18b20')) {
+            if (device.hasCapability('TemperatureMeasurement')) {
+                def temp = val['Temperature']
+                if (tempUnit) {
+                    temp += " °${tempUnit}"
+                }
+                device.sendEvent(name: 'temperature', value: temp, descriptionText: "${device.label ?: device.name} (contact ${idx}) temperature is now ${temp}", isStateChange: true)
+            }
+        }
+
         // wifi stats
         else if (key.equals('wifi')) {
             if (logInfo) log.info "${device.label ?: device.name} ${val}"
+            state.wifi = "ssid: ${val.SSId}, channel: ${val.Channel}, rssi: ${val.RSSI}, signal: ${val.Signal}, reconnects: ${val.LinkCount}"
         }
     }
 }
