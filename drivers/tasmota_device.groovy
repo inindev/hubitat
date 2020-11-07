@@ -140,12 +140,10 @@ def parse(msg) {
             }
 
             def devName = dev.label ?: dev.name
-            def swName = (idx > 1) ? "switch ${idx}" : 'switch'
-            dev.sendEvent(name: 'switch', value: val, descriptionText: "${devName} ${swName} is ${val}", isStateChange: true)
+            dev.sendEvent(name: 'switch', value: val, descriptionText: "${devName} switch is ${val}", isStateChange: true)
             if (dev.hasCapability('ContactSensor')) {
-                def ctName = (idx > 1) ? "contact ${idx}" : 'contact'
                 def oc = val.equals('on') ? 'open' : 'closed'
-                dev.sendEvent(name: 'contact', value: oc, descriptionText: "${devName} ${ctName} is ${oc}", isStateChange: true)
+                dev.sendEvent(name: 'contact', value: oc, descriptionText: "${devName} contacts are ${oc}", isStateChange: true)
             }
         }
 
