@@ -3,7 +3,7 @@
  *
  *    Hubitat driver for a virtual switch with a contact sensor.
  *
- *    Copyright 2020 John Clark
+ *    Copyright 2020 John Clark (inindev)
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -41,13 +41,13 @@ preferences {
 // https://docs.hubitat.com/index.php?title=Driver_Capability_List
 def off() {
     if (logInfo) log.info 'off command'
-    sendEvent(name: 'switch', value: 'off', descriptionText: 'switch turned off')
-    sendEvent(name: 'contact', value: 'open', descriptionText: 'contacts open')
+    sendEvent(name: 'switch', value: 'off', descriptionText: 'switch is off')
+    sendEvent(name: 'contact', value: 'open', descriptionText: 'contacts are open')
 }
 def on() {
     if (logInfo) log.info 'on command'
-    sendEvent(name: 'switch', value: 'on', descriptionText: 'switch turned on')
-    sendEvent(name: 'contact', value: 'closed', descriptionText: 'contacts closed')
+    sendEvent(name: 'switch', value: 'on', descriptionText: 'switch is on')
+    sendEvent(name: 'contact', value: 'closed', descriptionText: 'contacts are closed')
     runIn(8, off)
 }
 
