@@ -140,25 +140,24 @@ def parse(msg) {
             }
 
             def devName = dev.label ?: dev.name
-            dev.sendEvent(name: 'switch', value: val, descriptionText: "${devName} (switch ${idx}) is now ${val}", isStateChange: true)
+            def swName = (idx > 1) ? "switch ${idx}" : 'switch'
+            dev.sendEvent(name: 'switch', value: val, descriptionText: "${devName} ${swName} is ${val}", isStateChange: true)
             if (dev.hasCapability('ContactSensor')) {
+                def ctName = (idx > 1) ? "contact ${idx}" : 'contact'
                 def oc = val.equals('on') ? 'open' : 'closed'
-                dev.sendEvent(name: 'contact', value: oc, descriptionText: "${devName} (contact ${idx}) is now ${oc}", isStateChange: true)
+                dev.sendEvent(name: 'contact', value: oc, descriptionText: "${devName} ${ctName} is ${oc}", isStateChange: true)
             }
         }
 
         // temperature unit
         else if (key.equals('tempunit')) {
-            tempUnit = val
+            tempUnit = "°${val}"
         }
         // temperature
         else if (key.equals('ds18b20')) {
             if (device.hasCapability('TemperatureMeasurement')) {
                 def temp = val['Temperature']
-                if (tempUnit) {
-                    temp += " °${tempUnit}"
-                }
-                device.sendEvent(name: 'temperature', value: temp, descriptionText: "${device.label ?: device.name} (contact ${idx}) temperature is now ${temp}", isStateChange: true)
+                device.sendEvent(name: 'temperature', value: temp, unit: tempUnit, descriptionText: "${device.label ?: device.name} temperature is ${temp} ${tempUnit}", isStateChange: true)
             }
         }
 
