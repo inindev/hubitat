@@ -32,7 +32,8 @@ metadata {
         capability 'Outlet'
         capability 'Switch'
 //        capability 'ContactSensor'
-//        capability "TemperatureMeasurement"
+//        capability 'RelativeHumidityMeasurement'
+//        capability 'TemperatureMeasurement'
     }
 }
 
@@ -151,7 +152,18 @@ def parse(msg) {
         else if (key.equals('tempunit')) {
             tempUnit = "°${val}"
         }
-        // temperature
+        // si7021: humidity / temperature
+        else if (key.equals('si7021')) {
+            if (device.hasCapability('RelativeHumidityMeasurement')) {
+                def humid = val['Humidity']
+                device.sendEvent(name: 'humidity', value: humid, unit: '%', descriptionText: "${device.label ?: device.name} humidity is ${humid}%", isStateChange: true)
+            }
+            if (device.hasCapability('TemperatureMeasurement')) {
+                def temp = val['Temperature']
+                device.sendEvent(name: 'temperature', value: temp, unit: tempUnit, descriptionText: "${device.label ?: device.name} temperature is ${temp} ${tempUnit}", isStateChange: true)
+            }
+        }
+        // ds18b20: temperature
         else if (key.equals('ds18b20')) {
             if (device.hasCapability('TemperatureMeasurement')) {
                 def temp = val['Temperature']
