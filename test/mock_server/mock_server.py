@@ -27,7 +27,8 @@ import re
 mock_files = {
     'GET /portal/': 'mocks/portal_get.mock',
     'POST /portal/': 'mocks/portal_post.mock',
-    'POST /portal/Device/GetZoneListData?locationId=2440278&page=1': 'mocks/portal_gzld_post.mock',
+    'POST /portal/Location/GetLocationListData?page=1': 'mocks/portal_glld_post.mock',
+    'POST /portal/Device/GetZoneListData?locationId=2468357&page=1': 'mocks/portal_gzld_post.mock',
 }
 
 #hl_names = re.compile(r'^(.*?[:]?)(?=[ ])', re.MULTILINE)
