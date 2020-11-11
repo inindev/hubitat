@@ -19,7 +19,8 @@
  *    limitations under the License.
  *
  *    version history
- *      0.0.1: 11/7/2020 - initial release
+ *      0.0.1: 11/07/2020 - base skeleton
+ *      0.0.2: 11/11/2020 - working auth, xmlhttprequest post
  *
  */
 
@@ -44,7 +45,7 @@ preferences {
 }
 
 @groovy.transform.Field static final Map config = [
-    version: [ '0.0.1' ],
+    version: [ '0.0.2' ],
     uri: [
         tccSite: 'https://mytotalconnectcomfort.com',
     ],
@@ -52,10 +53,12 @@ preferences {
         portal: '/portal/',
         gzld:   '/portal/Device/GetZoneListData',
         scsc:   '/portal/Device/SubmitControlScreenChanges',
+        glld:   '/portal/Location/GetLocationListData',
     ],
     header: [
-        userAgent:       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:81.0) Gecko/20100101 Firefox/81.0',
+        userAgent:       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:82.0) Gecko/20100101 Firefox/82.0',
         acceptAll:       'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        acceptJson:      'application/json, text/javascript, */*; q=0.01',
         contentTypeForm: 'application/x-www-form-urlencoded',
         contentTypeJson: 'application/json; charset=utf-8',
         acceptLang:      'en-US,en;q=0.5',
@@ -192,6 +195,80 @@ def updated() {
 }
 
 
+def xPost(path) {
+    log2.debug "xPost - path: ${path}"
+
+    def params = [
+        uri: config.uri.tccSite,
+        path: path,
+        query: [page:1],
+        contentType: config.header.acceptJson, // Accept
+        requestContentType: config.header.contentTypeJson, // Content-Type
+        headers: [
+            'User-Agent'     : config.header.userAgent,
+            'Accept-Language': config.header.acceptLang,
+            'DNT'            : '1',
+            'Sec-GPC'        : '1',
+            'Connection'     : 'keep-alive',
+        ],
+    ]
+    def cookieStr = cookieMgr.serialize()
+    if(cookieStr) params.headers.Cookie = cookieStr
+
+    def result
+    httpPost(params) { resp ->
+        log2.debug "xPost - status: ${resp.status}"
+        resp.getHeaders('Set-Cookie').each { cookie ->
+            cookieMgr.process(cookie.value)
+        }
+        cookieMgr.save()
+
+        result = resp.data
+        log2.trace "resp.data: ${result}"
+    }
+
+    return result
+}
+
+def webAuthenticate() {
+    log2.trace "webAuthenticate - user: ${userEmail}"
+
+    def params = [
+        uri: config.uri.tccSite,
+        path: config.path.portal,
+        contentType: config.header.acceptAll,
+        requestContentType: config.header.contentTypeForm,
+        headers: [
+            'User-Agent'     : config.header.userAgent,
+            'Accept-Language': config.header.acceptLang,
+            'Accept-Encoding': 'gzip, deflate',
+            'DNT'            : '1',
+            'Sec-GPC'        : '1',
+            'Connection'     : 'keep-alive',
+        ],
+        body: "timeOffset=240&UserName=${URLEncoder.encode(userEmail, 'UTF-8')}&Password=${URLEncoder.encode(decrypt(userAuthCrypt), 'UTF-8')}&RememberMe=false",
+    ]
+    def cookieStr = cookieMgr.serialize()
+    if(cookieStr) params.headers.Cookie = cookieStr
+
+    try {
+        httpPost(params) { resp ->
+            log2.debug "webAuthenticate - status: ${resp.status}"
+            resp.getHeaders('Set-Cookie').each { cookie ->
+                cookieMgr.process(cookie.value)
+            }
+            cookieMgr.save()
+        }
+    }
+    catch(groovyx.net.http.HttpResponseException ex) {
+        log2.error "HttpResponseException thrown: ${ex}"
+        return false // failure
+    }
+
+    return true // success
+}
+
+
 // cookie management
 @groovy.transform.Field Map cookieMgr = [
     'store': null,
@@ -213,10 +290,10 @@ def updated() {
         def name = (pos == -1) ? cookieList.first() : cookieList.first().take(pos+1); pos = name.size()
         def expires = (cookieList.size() > 1) ? cookieList[1] : -1
         cookieMgr.store.removeIf { it.first().take(pos).equalsIgnoreCase(name) }
-        if((expires > -1) && expires < now()) {
-            log2.debug "cookieMgr.process - removing expired cookie - name: ${name}  exp: ${expires}"
+        if((expires > -1) && (expires < now())) {
+            log2.debug "cookieMgr.process - removing expired cookie - name: ${name}  exp: ${new Date(expires)}"
         } else {
-            log2.debug "cookieMgr.process - adding cookie - name: ${name}  exp: ${expires}"
+            log2.debug "cookieMgr.process - adding cookie - name: ${name}  exp: ${(expires==-1)?'(never)':new Date(expires)}"
             cookieMgr.store.add(cookieList)
         }
     },
