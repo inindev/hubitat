@@ -204,11 +204,11 @@ def createSwitches(int num) {
     }
 
     // (re)create children
-    def mac = device.getDeviceNetworkId()
+    def dni = device.getDeviceNetworkId()
     labelNames.each { i, label ->
         def name = "${device.name} - Child${i}"
         if (logInfo) log.info "creating child device: ${name}"
-        addChildDevice('Tasmota Device', "${mac}-${i}", [name:name, label:label, isComponent:true])
+        addChildDevice('Tasmota Device', "${dni}-${i}", [name:name, label:label, isComponent:true])
     }
 
     if (num > 1) {
