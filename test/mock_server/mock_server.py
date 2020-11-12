@@ -4,7 +4,7 @@
 #
 #    Mock service to simulate the Honeywell WiFi 9000 Thermostat REST server
 #
-#    Copyright 2000 John Clark
+#    Copyright 2020 John Clark (inindev)
 #
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
