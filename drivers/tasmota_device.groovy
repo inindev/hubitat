@@ -140,11 +140,10 @@ def parse(msg) {
                 return;
             }
 
-            def devName = dev.label ?: dev.name
-            dev.sendEvent(name: 'switch', value: val, descriptionText: "${devName} switch is ${val}", isStateChange: true)
+            dev.sendEvent(name: 'switch', value: val, descriptionText: "${dev.displayName} switch is ${val}", isStateChange: true)
             if (dev.hasCapability('ContactSensor')) {
                 def oc = val.equals('on') ? 'open' : 'closed'
-                dev.sendEvent(name: 'contact', value: oc, descriptionText: "${devName} contacts are ${oc}", isStateChange: true)
+                dev.sendEvent(name: 'contact', value: oc, descriptionText: "${dev.displayName} contacts are ${oc}", isStateChange: true)
             }
         }
 
@@ -156,24 +155,24 @@ def parse(msg) {
         else if (key.equals('si7021')) {
             if (device.hasCapability('RelativeHumidityMeasurement')) {
                 def humid = val['Humidity']
-                device.sendEvent(name: 'humidity', value: humid, unit: '%', descriptionText: "${device.label ?: device.name} humidity is ${humid}%", isStateChange: true)
+                device.sendEvent(name: 'humidity', value: humid, unit: '%', descriptionText: "${device.displayName} humidity is ${humid}%", isStateChange: true)
             }
             if (device.hasCapability('TemperatureMeasurement')) {
                 def temp = val['Temperature']
-                device.sendEvent(name: 'temperature', value: temp, unit: tempUnit, descriptionText: "${device.label ?: device.name} temperature is ${temp} ${tempUnit}", isStateChange: true)
+                device.sendEvent(name: 'temperature', value: temp, unit: tempUnit, descriptionText: "${device.displayName} temperature is ${temp} ${tempUnit}", isStateChange: true)
             }
         }
         // ds18b20: temperature
         else if (key.equals('ds18b20')) {
             if (device.hasCapability('TemperatureMeasurement')) {
                 def temp = val['Temperature']
-                device.sendEvent(name: 'temperature', value: temp, unit: tempUnit, descriptionText: "${device.label ?: device.name} temperature is ${temp} ${tempUnit}", isStateChange: true)
+                device.sendEvent(name: 'temperature', value: temp, unit: tempUnit, descriptionText: "${device.displayName} temperature is ${temp} ${tempUnit}", isStateChange: true)
             }
         }
 
         // wifi stats
         else if (key.equals('wifi')) {
-            if (logInfo) log.info "${device.label ?: device.name} ${val}"
+            if (logInfo) log.info "${device.displayName} ${val}"
             state.wifi = "ssid: ${val.SSId}, channel: ${val.Channel}, rssi: ${val.RSSI}, signal: ${val.Signal}, reconnects: ${val.LinkCount}"
         }
     }
@@ -208,7 +207,7 @@ def createSwitches(int num) {
     labelNames.each { i, label ->
         def name = "${device.name} - Child${i}"
         if (logInfo) log.info "creating child device: ${name}"
-        addChildDevice('Tasmota Device', "${dni}-${i}", [name:name, label:label, isComponent:true])
+        addChildDevice(device.typeName, "${dni}-${i}", [name:name, label:label, isComponent:true])
     }
 
     if (num > 1) {
