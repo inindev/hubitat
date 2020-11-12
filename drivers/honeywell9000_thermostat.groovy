@@ -205,17 +205,20 @@ def xPost(path) {
         contentType: config.header.acceptJson, // Accept
         requestContentType: config.header.contentTypeJson, // Content-Type
         headers: [
-            'User-Agent'     : config.header.userAgent,
-            'Accept-Language': config.header.acceptLang,
-            'DNT'            : '1',
-            'Sec-GPC'        : '1',
-            'Connection'     : 'keep-alive',
+            'User-Agent'      : config.header.userAgent,
+            'Accept-Language' : config.header.acceptLang,
+            'Accept-Encoding' : 'gzip, deflate',
+            'X-Requested-With': 'XMLHttpRequest',
+            'DNT'             : '1',
+            'Sec-GPC'         : '1',
+            'Connection'      : 'keep-alive',
         ],
+        textParser: true,
     ]
     def cookieStr = cookieMgr.serialize()
     if(cookieStr) params.headers.Cookie = cookieStr
 
-    def result
+    def json
     httpPost(params) { resp ->
         log2.debug "xPost - status: ${resp.status}"
         resp.getHeaders('Set-Cookie').each { cookie ->
@@ -223,11 +226,10 @@ def xPost(path) {
         }
         cookieMgr.save()
 
-        result = resp.data
-        log2.trace "resp.data: ${result}"
+        def data = new String(resp.getData().getBytes())
+        json = parseJson(data)
     }
-
-    return result
+    return json
 }
 
 def webAuthenticate() {
@@ -246,10 +248,11 @@ def webAuthenticate() {
             'Sec-GPC'        : '1',
             'Connection'     : 'keep-alive',
         ],
-        body: "timeOffset=240&UserName=${URLEncoder.encode(userEmail, 'UTF-8')}&Password=${URLEncoder.encode(decrypt(userAuthCrypt), 'UTF-8')}&RememberMe=false",
+        body: "timeOffset=240&UserName=${URLEncoder.encode(userEmail,'UTF-8')}&Password=${URLEncoder.encode(decrypt(userAuthCrypt),'UTF-8')}&RememberMe=false",
     ]
-    def cookieStr = cookieMgr.serialize()
-    if(cookieStr) params.headers.Cookie = cookieStr
+
+    // reset all cookies
+    cookieMgr.flush()
 
     try {
         httpPost(params) { resp ->
@@ -274,7 +277,7 @@ def webAuthenticate() {
     'store': null,
     'serialize': {
         log2.trace 'cookieMgr.serialize'
-        if(!cookieMgr.store) cookieMgr.load()
+        if(cookieMgr.store == null) cookieMgr.load()
         cookieMgr.store.removeIf { (it[1] > -1) && (it[1] < now()) }
         def str = cookieMgr.store.collect{ it.first() }.join('; ')
         log2.trace "cookieMgr.serialize - str: ${str}"
@@ -282,9 +285,9 @@ def webAuthenticate() {
     },
     'process': { rawCookie ->
         def cookieList = cookieMgr.parse(rawCookie)
-        log2.trace "cookieMgr.process - rawCookie: ${rawCookie}  cookieList: ${cookieList}"
+        log2.trace "cookieMgr.process - cookieList: ${cookieList}"
         if(!cookieList) return;
-        if(!cookieMgr.store) cookieMgr.load()
+        if(cookieMgr.store == null) cookieMgr.load()
 
         def pos = cookieList.first().indexOf('=')
         def name = (pos == -1) ? cookieList.first() : cookieList.first().take(pos+1); pos = name.size()
@@ -293,7 +296,7 @@ def webAuthenticate() {
         if((expires > -1) && (expires < now())) {
             log2.debug "cookieMgr.process - removing expired cookie - name: ${name}  exp: ${new Date(expires)}"
         } else {
-            log2.debug "cookieMgr.process - adding cookie - name: ${name}  exp: ${(expires==-1)?'(never)':new Date(expires)}"
+            log2.debug "cookieMgr.process - adding cookie - name: ${name}  exp: ${(expires==-1)?'-1':new Date(expires)}"
             cookieMgr.store.add(cookieList)
         }
     },
@@ -337,7 +340,7 @@ def webAuthenticate() {
             cookieMgr.store = store.collect { it instanceof List ? it : [it, -1] }
         } catch (ex) {
             log2.error("cookieMgr.load - parseJson: ${ex}")
-            removeDataValue('cookies')
+            cookieMgr.flush()
         }
     },
     'save': {
@@ -345,6 +348,11 @@ def webAuthenticate() {
         log2.trace "cookieMgr.save - json: ${json}"
         updateDataValue('cookies', json)
     },
+    'flush': {
+        log2.debug 'cookieMgr.flush'
+        cookieMgr.store = []
+        removeDataValue('cookies')
+    }
 ]
 
 // logging
