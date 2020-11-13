@@ -18,10 +18,6 @@
  *    See the License for the specific language governing permissions and
  *    limitations under the License.
  *
- *    version history
- *      0.0.1: 11/07/2020 - base skeleton
- *      0.0.2: 11/11/2020 - working auth, xmlhttprequest post
- *
  */
 
 metadata {
@@ -32,6 +28,8 @@ metadata {
             author: 'John Clark',
             importUrl: 'https://raw.githubusercontent.com/inindev/hubitat/main/drivers/honeywell9000_thermostat.groovy',
     ) {
+        capability "Initialize"
+        capability "Polling"
         capability 'Thermostat'
         capability 'TemperatureMeasurement'
         capability 'RelativeHumidityMeasurement'
@@ -39,15 +37,18 @@ metadata {
 }
 
 preferences {
-    input name: 'userEmail', type: 'text', title: 'Honeywell email', required: true
-    input name: 'userAuth', type: 'text', title: 'Honeywell password', required: true
-    input name: 'logLevelEnum', type: 'enum', title: 'Logging level', options: [0:'none',1:'error',2:'warn',3:'info',4:'debug',5:'trace'], defaultValue: 3
+    if(getParent() == null) {
+        input name: 'userEmail', type: 'text', title: 'Honeywell email', required: true
+        input name: 'userAuth', type: 'text', title: 'Honeywell password', required: true
+        input name: 'logLevelEnum', type: 'enum', title: 'Logging level', options: [0:'none',1:'error',2:'warn',3:'info',4:'debug',5:'trace'], defaultValue: 3
+    }
 }
 
 @groovy.transform.Field static final Map config = [
-    version: [ '0.0.2' ],
+    version: [ '0.0.3' ],
     uri: [
-        tccSite: 'https://mytotalconnectcomfort.com',
+        tccSiteProd: 'https://mytotalconnectcomfort.com',
+        tccSite: 'http://192.168.120.245:8080',
     ],
     path: [
         portal: '/portal/',
@@ -67,37 +68,49 @@ preferences {
 
 
 /**
- * Thermostat::off - set thermostat mde to 'off'
+ * Initialize::initialize - initial thermostat setup
  */
-def off() {
+void initialize() {
+}
+
+/**
+ * Polling::poll - refresh thermostat values
+ */
+void poll() {
+}
+
+/**
+ * Thermostat::off - set thermostat mode to 'off'
+ */
+void off() {
     log2.debug "Thermostat::off"
     setThermostatMode('off')
 }
 /**
- * Thermostat::cool - set thermostat mde to 'cool'
+ * Thermostat::cool - set thermostat mode to 'cool'
  */
-def cool() {
+void cool() {
     log2.debug "Thermostat::cool"
     setThermostatMode('cool')
 }
 /**
- * Thermostat::heat - set thermostat mde to 'heat'
+ * Thermostat::heat - set thermostat mode to 'heat'
  */
-def heat() {
+void heat() {
     log2.debug "Thermostat::heat"
     setThermostatMode('heat')
 }
 /**
- * Thermostat::emergencyHeat - set thermostat mde to 'emergency heat'
+ * Thermostat::emergencyHeat - set thermostat mode to 'emergency heat'
  */
-def emergencyHeat() {
+void emergencyHeat() {
     log2.debug "Thermostat::emergencyHeat"
     setThermostatMode('emergency heat')
 }
 /**
- * Thermostat::auto - set thermostat mde to 'auto'
+ * Thermostat::auto - set thermostat mode to 'auto'
  */
-def auto() {
+void auto() {
     log2.debug "Thermostat::auto"
     setThermostatMode('auto')
 }
@@ -105,21 +118,21 @@ def auto() {
 /**
  * Thermostat::fanAuto - set fan mode to 'auto'
  */
-def fanAuto() {
+void fanAuto() {
     log2.debug "Thermostat::fanAuto"
     setThermostatFanMode('auto')
 }
 /**
  * Thermostat::fanCirculate - set fan mode to 'circulate'
  */
-def fanCirculate() {
+void fanCirculate() {
     log2.debug "Thermostat::fanCirculate"
     setThermostatFanMode('circulate')
 }
 /**
  * Thermostat::fanOn - set fan mode to 'on'
  */
-def fanOn() {
+void fanOn() {
     log2.debug "Thermostat::fanOn"
     setThermostatFanMode('on')
 }
@@ -128,7 +141,7 @@ def fanOn() {
  * Thermostat::setCoolingSetpoint
  * @param temperature - cooling setpoint in degrees C/F
  */
-def setCoolingSetpoint(java.math.BigDecimal temperature) {
+void setCoolingSetpoint(java.math.BigDecimal temperature) {
     log2.info "Thermostat::setCoolingSetpoint - temperature: ${temperature}"
 }
 
@@ -136,7 +149,7 @@ def setCoolingSetpoint(java.math.BigDecimal temperature) {
  * Thermostat::setHeatingSetpoint
  * @param temperature - heating setpoint in degrees C/F
  */
-def setHeatingSetpoint(java.math.BigDecimal temperature) {
+void setHeatingSetpoint(java.math.BigDecimal temperature) {
     log2.info "Thermostat::setHeatingSetpoint - temperature: ${temperature}"
 }
 
@@ -144,7 +157,7 @@ def setHeatingSetpoint(java.math.BigDecimal temperature) {
  * Thermostat::setSchedule
  * @param schedule - schedule to set (json string)
  */
-def setSchedule(String schedule) {
+void setSchedule(String schedule) {
     log2.info "Thermostat::setSchedule - schedule: ${schedule}"
 }
 
@@ -152,7 +165,7 @@ def setSchedule(String schedule) {
  * Thermostat::fanmode
  * @param mode - fan mode to set: 'on', 'circulate', 'auto'
  */
-def setThermostatFanMode(String mode) {
+void setThermostatFanMode(String mode) {
     log2.info "Thermostat::fanmode - mode: ${mode}"
 }
 
@@ -160,7 +173,7 @@ def setThermostatFanMode(String mode) {
  * Thermostat::setThermostatMode
  * @param mode - thermostat mode to set: 'off', 'cool', 'heat', 'emergency heat', 'auto'
  */
-def setThermostatMode(String mode) {
+void setThermostatMode(String mode) {
     log2.info "Thermostat::setThermostatMode - mode: ${mode}"
 }
 
@@ -168,30 +181,48 @@ def setThermostatMode(String mode) {
 /**
  * Device::installed - called when the device is first created
  */
-def installed() {
+void installed() {
     device.updateSetting('logLevel', 3)
-    log.info " ${device.label ?: device.name} : virtual thermostat created"
+    log.info " ${device.getDisplayName()} : virtual thermostat created"
 }
 /**
  * Device::uninstalled - called when the device is removed
  */
-def uninstalled() {
+void uninstalled() {
     log2.info "virtual thermostat uninstalled"
 }
 /**
  * Device::updated - called when the preferences of a device are updated
  */
-def updated() {
+void updated() {
     def logLevel = logLevelEnum?.isInteger() ? logLevelEnum.toInteger() : 3
     device.updateSetting('logLevel', logLevel)
 
     if(userAuth != '*************') {
         device.updateSetting('userAuthCrypt', encrypt(userAuth))
         device.updateSetting('userAuth', '*************')
-        if(logLevel > 2) log.info " ${device.label ?: device.name} : encrypted password updated"
+        if(logLevel > 2) log.info " ${device.getDisplayName()} : encrypted password updated"
     }
 
-    if(logLevel > 2) log.info " ${device.label ?: device.name} : virtual thermostat updated - logging level: ${['none','error','warn','info','debug','trace'].getAt(logLevel)}"
+    if(logLevel > 2) log.info " ${device.getDisplayName()} : virtual thermostat updated - logging level: ${['none','error','warn','info','debug','trace'].getAt(logLevel)}"
+}
+
+
+/**
+ * creates child devices from the json response
+ */
+void createThermostats(tstats) {
+    log2.debug "createThermostats - tstats: {tstats} - type: ${device.getTypeName()}"
+
+    childDevices.each { childDevice ->
+        deleteChildDevice(childDevice.deviceNetworkId)
+    }
+
+    tstats.each { tstat ->
+        def childDevice = addChildDevice(device.typeName, tstat.MacID.toLowerCase(), [label:tstat.Name, isComponent:true])
+        childDevice.state.deviceId = tstat.DeviceID
+        childDevice.state.displayUnits = tstat.DisplayUnits==1 ? '°F' : '°C'
+    }
 }
 
 
@@ -226,13 +257,13 @@ def xPost(path) {
         }
         cookieMgr.save()
 
-        def data = new String(resp.getData().getBytes())
-        json = parseJson(data)
+        def data = resp.getData().getBytes()
+        json = parseJson(new String(data))
     }
     return json
 }
 
-def webAuthenticate() {
+boolean webAuthenticate() {
     log2.trace "webAuthenticate - user: ${userEmail}"
 
     def params = [
@@ -357,9 +388,9 @@ def webAuthenticate() {
 
 // logging
 @groovy.transform.Field Map log2 = [
-    'error': { msg -> if(logLevel > 0) log.error " ${device.label ?: device.name} : ${msg}" },
-    'warn' : { msg -> if(logLevel > 1) log.warn  " ${device.label ?: device.name} : ${msg}" },
-    'info' : { msg -> if(logLevel > 2) log.info  " ${device.label ?: device.name} : ${msg}" },
-    'debug': { msg -> if(logLevel > 3) log.debug " ${device.label ?: device.name} : ${msg}" },
-    'trace': { msg -> if(logLevel > 4) log.trace " ${device.label ?: device.name} : ${msg}" },
+    'error': { msg -> if(logLevel > 0) log.error " ${device.getDisplayName()} : ${msg}" },
+    'warn' : { msg -> if(logLevel > 1) log.warn  " ${device.getDisplayName()} : ${msg}" },
+    'info' : { msg -> if(logLevel > 2) log.info  " ${device.getDisplayName()} : ${msg}" },
+    'debug': { msg -> if(logLevel > 3) log.debug " ${device.getDisplayName()} : ${msg}" },
+    'trace': { msg -> if(logLevel > 4) log.trace " ${device.getDisplayName()} : ${msg}" },
 ]
