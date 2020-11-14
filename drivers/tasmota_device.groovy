@@ -64,23 +64,23 @@ def setRelayState(num, state) {
         return
     }
 
-    if (logDebug) log.debug "setRelayState - num: ${num}  state: ${state}"
+    log2.debug "setRelayState - num: ${num}  state: ${state}"
 
     if (!tasmotaIp) {
-        log.error 'the ip address of the target tasmota device has not been set'
+        log2.error 'the ip address of the target tasmota device has not been set'
         return
     }
 
     // num==0 means "all relays" if we have children
     if (num < 1) {
         if (haveChildren()) {
-            if (logInfo) log.info "turning all child relays ${state?'on':'off'}"
+            log2.info "turning all child relays ${state?'on':'off'}"
         } else {
             num = 1
         }
     }
     else if (num > 8) {
-        log.error "relay number: ${num} is out of range (n > 8)"
+        log2.error "relay number: ${num} is out of range (n > 8)"
         return
     }
 
@@ -89,9 +89,9 @@ def setRelayState(num, state) {
 }
 def httpCallback(resp, data) {
     if (resp.status == 200) {
-        if (logDebug) log.debug "http 200 ok - json: ${resp.json}"
+        log2.debug "http 200 ok - json: ${resp.json}"
     } else {
-        log.error "http response code ${resp.status}"
+        log2.error "http response code ${resp.status}"
     }
 }
 
@@ -102,6 +102,8 @@ def uninstalled() {
 def updated() {
     if (!isRootDevice()) return // not callable from child device
 
+    if (logDebug) device.updateSetting('logInfo', true) // debug implies info
+
     // update device network id
     if (tasmotaIp) {
         def ip = tasmotaIp.tokenize(':').first()
@@ -109,7 +111,7 @@ def updated() {
         def ipHex = ip.tokenize('.').collect{intToHexStr(it as int)}.join()
         def dnid = device.getDeviceNetworkId()
         if (ipHex != dnid) {
-            if (logInfo) log.info "updating Device Network Id to: ${ipHex}"
+            log2.info "updating Device Network Id to: ${ipHex}"
             device.setDeviceNetworkId(ipHex)
         }
     }
@@ -120,23 +122,23 @@ def updated() {
 def parse(msg) {
     def json = parseLanMessage(msg)?.json
     if (!json) return
-    if (logDebug) log.trace "parse - json: ${json}"
+    log2.trace "parse - json: ${json}"
 
     def tempUnit
     json.each { key, val ->
         key = key.toLowerCase()
-        if (logDebug) log.trace "evaluating  key: ${key}  val: ${val}"
+        log2.trace "evaluating  key: ${key}  val: ${val}"
 
         // power state updated
         if (key.startsWith('power')) {
             def idxStr = key.substring(5)
             def idx = idxStr?.isInteger() ? idxStr.toInteger() : 1
             val = val.toLowerCase()
-            if (logInfo) log.info "switch ${idx} reported state '${val}'"
+            log2.info "switch ${idx} reported state '${val}'"
 
             def dev = getDevice(idx)
             if (!dev) {
-                log.warn "unable to find the device for index ${idx}"
+                log2.warn "unable to find the device for index ${idx}"
                 return;
             }
 
@@ -172,7 +174,8 @@ def parse(msg) {
 
         // wifi stats
         else if (key.equals('wifi')) {
-            if (logInfo) log.info "${device.displayName} ${val}"
+            log2.info "wifi: ${val}"
+            state.clear()
             state.wifi = "ssid: ${val.SSId}, channel: ${val.Channel}, rssi: ${val.RSSI}, signal: ${val.Signal}, reconnects: ${val.LinkCount}"
         }
     }
@@ -183,7 +186,7 @@ def parse(msg) {
  */
 def createSwitches(int num) {
     if (!isRootDevice()) return // not callable from child device
-    if (logInfo) log.info "createSwitches - setting child device count to: ${num}"
+    log2.info "createSwitches - setting child device count to: ${num}"
 
     // map of child devices to create: [idx:'label-idx']
     def labelNames = [:]
@@ -206,7 +209,7 @@ def createSwitches(int num) {
     def dni = device.getDeviceNetworkId()
     labelNames.each { i, label ->
         def name = "${device.name} - Child${i}"
-        if (logInfo) log.info "creating child device: ${name}"
+        log2.info "creating child device: ${name}"
         addChildDevice(device.typeName, "${dni}-${i}", [name:name, label:label, isComponent:true])
     }
 
@@ -259,3 +262,12 @@ def getDevice(int idx) {
     }
     return childDevices.find { it.getIndex() == idx }
 }
+
+// logging
+@groovy.transform.Field Map log2 = [
+    'error': { msg -> /* always */ log.error "${device.getDisplayName()} — ${msg}" },
+    'warn' : { msg -> /* always */ log.warn  "${device.getDisplayName()} — ${msg}" },
+    'info' : { msg -> if(logInfo)  log.info  "${device.getDisplayName()} — ${msg}" },
+    'debug': { msg -> if(logDebug) log.debug "${device.getDisplayName()} — ${msg}" },
+    'trace': { msg -> if(logDebug) log.trace "${device.getDisplayName()} — ${msg}" },
+]
