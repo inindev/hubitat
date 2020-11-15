@@ -1,7 +1,10 @@
 /**
  *  tasmota_device.groovy
  *
- *    Hubitat support for Tasmota based devices.
+ *    Hubitat support for Tasmota based devices
+ *
+ *    Note: Uncomment any capabilites below to enable features
+ *    as appropriate for your Tasmota device.
  *
  *    Copyright 2020 John Clark (inindev)
  *
@@ -27,11 +30,19 @@ metadata {
             author: 'John Clark',
             importUrl: 'https://raw.githubusercontent.com/inindev/hubitat/main/drivers/tasmota_device.groovy',
     ) {
+        // switch
         capability 'Bulb'
         capability 'Light'
         capability 'Outlet'
         capability 'Switch'
+        // sensor
 //        capability 'ContactSensor'
+        // power
+//        capability 'EnergyMeter'
+//        attribute  'energyDuration', 'number'
+//        capability 'PowerMeter'
+//        capability 'VoltageMeasurement'
+        // temp & humidity
 //        capability 'RelativeHumidityMeasurement'
 //        capability 'TemperatureMeasurement'
     }
@@ -146,6 +157,27 @@ def parse(msg) {
             if (dev.hasCapability('ContactSensor')) {
                 def oc = val.equals('on') ? 'open' : 'closed'
                 dev.sendEvent(name: 'contact', value: oc, descriptionText: "${dev.displayName} contacts are ${oc}", isStateChange: true)
+            }
+        }
+
+        // energy
+        else if (key.equals('energy')) {
+            if (device.hasCapability('EnergyMeter')) {
+                def energy = val['Total']
+                device.sendEvent(name: 'energy', value: energy, unit: 'kWh', descriptionText: "${device.displayName} energy is ${energy} kWh", isStateChange: true)
+
+                def totalStartTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss", val['TotalStartTime'])
+                def energyDuration = (now() - totalStartTime.getTime()) / 86400000 // 1000 * 3600 * 24
+                def energyDurationStr = String.format("%.3f", energyDuration)
+                device.sendEvent(name: 'energyDuration', value: energyDurationStr, unit: 'Days', descriptionText: "${device.displayName} energyDuration is ${energyDurationStr} Days", isStateChange: true)
+            }
+            if (device.hasCapability('PowerMeter')) {
+                def power = val['Power']
+                device.sendEvent(name: 'power', value: power, unit: 'W', descriptionText: "${device.displayName} power is ${power} W", isStateChange: true)
+            }
+            if (device.hasCapability('VoltageMeasurement')) {
+                def voltage = val['Voltage']
+                device.sendEvent(name: 'voltage', value: voltage, unit: 'V', descriptionText: "${device.displayName} voltage is ${voltage} V", isStateChange: true)
             }
         }
 
