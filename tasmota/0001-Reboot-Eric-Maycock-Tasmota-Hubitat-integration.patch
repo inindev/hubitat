@@ -1,6 +1,6 @@
-From c77f3177c195dc7fb98ac6d4c95b35438291463f Mon Sep 17 00:00:00 2001
+From 6cbffc0547c434b495ffa023772c14ba175c69d6 Mon Sep 17 00:00:00 2001
 From: John Clark <inindev@gmail.com>
-Date: Thu, 5 Nov 2020 05:14:20 -0500
+Date: Sat, 7 Nov 2020 06:23:03 -0500
 Subject: [PATCH] Reboot of Eric Maycock's Tasmota-Hubitat integration:
  github.com/erocm123/Sonoff-Tasmota
 
@@ -98,7 +98,7 @@ index 806c3386..5bdcf4d6 100644
    // Only 32 bit boundary variables below
    SysBitfield5  flag5;                     // FB4
 diff --git a/tasmota/settings.ino b/tasmota/settings.ino
-index 5ee75c2c..12462592 100644
+index 3fe1809b..85bc6b2d 100644
 --- a/tasmota/settings.ino
 +++ b/tasmota/settings.ino
 @@ -845,6 +845,10 @@ void SettingsDefaultSet2(void)
@@ -157,7 +157,7 @@ index 857857d5..5849d98c 100644
        snprintf_P(slog_type, sizeof(slog_type), PSTR(D_LOG_MQTT));
 diff --git a/tasmota/xdrv_88_hubitat.ino b/tasmota/xdrv_88_hubitat.ino
 new file mode 100644
-index 00000000..b41296fb
+index 00000000..f8542d37
 --- /dev/null
 +++ b/tasmota/xdrv_88_hubitat.ino
 @@ -0,0 +1,189 @@
@@ -227,7 +227,7 @@ index 00000000..b41296fb
 +  espHttpClient.addHeader("Content-Type", "application/json;charset=utf-8");
 +  int32_t httpStatus = espHttpClient.POST(reinterpret_cast<const uint8_t*>(data), strlen(data));
 +  if(httpStatus < 0) {
-+    delay(0); // yield and try again
++    yield();
 +    httpStatus = espHttpClient.POST(reinterpret_cast<const uint8_t*>(data), strlen(data));
 +  }
 +  if(httpStatus != 200) {
@@ -351,5 +351,5 @@ index 00000000..b41296fb
 +  return result;
 +}
 -- 
-2.21.1 (Apple Git-122.3)
+2.24.3 (Apple Git-128)
 
