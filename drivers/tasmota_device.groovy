@@ -3,8 +3,8 @@
  *
  *    Hubitat support for Tasmota based devices
  *
- *    Note: Uncomment any capabilites below to enable features
- *    as appropriate for your Tasmota device.
+ *    Note: Uncomment the various capabilites below to enable
+ *          features as appropriate for your Tasmota device.
  *
  *    Copyright 2020 John Clark (inindev)
  *
@@ -125,6 +125,10 @@ def updated() {
             log2.info "updating Device Network Id to: ${ipHex}"
             device.setDeviceNetworkId(ipHex)
         }
+
+        state.device = "<a target='_blank' href=\'http://${tasmotaIp}\'>http://${tasmotaIp}</a>"
+    } else {
+        state.remove('device')
     }
 
     createSwitches(relayCount?.isInteger() ? relayCount.toInteger() : 1)
@@ -207,7 +211,6 @@ def parse(msg) {
         // wifi stats
         else if (key.equals('wifi')) {
             log2.info "wifi: ${val}"
-            state.clear()
             state.wifi = "ssid: ${val.SSId}, channel: ${val.Channel}, rssi: ${val.RSSI}, signal: ${val.Signal}, reconnects: ${val.LinkCount}"
         }
     }
