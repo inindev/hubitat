@@ -45,7 +45,7 @@ preferences {
 }
 
 @groovy.transform.Field static final Map config = [
-    version: [ '0.0.4' ],
+    version: [ '0.0.5' ],
     uri: [
         tccSite: 'https://mytotalconnectcomfort.com',
     ],
@@ -70,12 +70,83 @@ preferences {
  * Initialize::initialize - initial thermostat setup
  */
 void initialize() {
+    log2.info "initialize"
+
+    def parent = getParent()
+    if(parent) { // called on a child, pass up to root
+        parent.initialize()
+        return
+    }
+
+    state.clear()
+
+    def status = webAuthenticate();
+    if(status >= 400) {
+        log2.error "initialize - webAuthenticate failed with status: ${status}"
+        if(status == 401) {
+            state.error = '<span style="color:red">Web Authentication Failed: Check email and password then try again.</span>'
+        } else {
+            state.error = "<span style='color:red'>Web Authentication Failed - status: ${status}</span>"
+        }
+        return
+    }
+
+    try {
+        def lld = xPost(config.path.glld)?.first()
+        if(!lld) {
+            state.error = "<span style='color:red'>No Location List Data returned from server!</span>"
+            return
+        }
+
+        state.locationId = lld.LocationID
+        createThermostats(lld.Devices)
+    }
+    catch(groovyx.net.http.HttpResponseException ex) {
+        status = ex.getStatusCode()
+        log2.error "${ex.getResponse()} - status: ${status}"
+        state.error = "<span style='color:red'>Failed to fetch Location List Data - status: ${status}</span>"
+    }
 }
 
 /**
  * Polling::poll - refresh thermostat values
  */
 void poll() {
+    log2.info "poll"
+
+    def parent = getParent()
+    if(parent) { // called on a child, pass up to root
+        parent.poll()
+        return
+    }
+
+    if(!state.locationId) {
+        log2.error 'locationId is not set'
+        return
+    }
+
+    try {
+        def zld = xPost(config.path.gzld, [locationId:state.locationId])
+        if(!zld) {
+            state.error = "<span style='color:red'>No Zone List Data returned from server!</span>"
+            return
+        }
+
+        zld.each { zd ->
+            def therm = childDevices.find {it.getDeviceId() == zd.DeviceID}
+            if(!therm) {
+                log2.error "thermostat not found - id: ${zd.DeviceID}"
+            } else {
+                therm.updateValues(zd)
+            }
+        }
+    }
+    catch(groovyx.net.http.HttpResponseException ex) {
+        status = ex.getStatusCode()
+        // if 401 then auth & retry
+        log2.error "${ex.getResponse()} - status: ${status}"
+        state.error = "<span style='color:red'>Failed to fetch Zone List Data - status: ${status}</span>"
+    }
 }
 
 /**
@@ -231,7 +302,8 @@ void createThermostats(thrmDataCollection) {
 void setStateParams(thrmData) {
     log2.info "setStateParams - thrmData: ${thrmData}"
 
-    state.lastUpdated = new Date()
+    state.clear()
+    state.lastUpdated = new Date().toString()
 
     state.deviceId = thrmData.DeviceID
 
@@ -253,20 +325,37 @@ void setStateParams(thrmData) {
         state.outdoorHumidity = thrmData.ThermostatData.OutdoorHumidity
     }
 
-    sendEvent(name: 'temperature', value: thrmData.ThermostatData.IndoorTemperature, unit: tempUnit, descriptionText: "${device.displayName} temperature is ${thrmData.ThermostatData.IndoorTemperature} ${tempUnit}", isStateChange: true)
-    sendEvent(name: 'humidity', value: thrmData.ThermostatData.IndoorHumidity, unit: '%', descriptionText: "${device.displayName} humidity is ${thrmData.ThermostatData.IndoorHumidity}%", isStateChange: true)
+    device.sendEvent(name: 'temperature', value: thrmData.ThermostatData.IndoorTemperature, unit: tempUnit, descriptionText: "${device.displayName} temperature is ${thrmData.ThermostatData.IndoorTemperature} ${tempUnit}", isStateChange: true)
+    device.sendEvent(name: 'humidity', value: thrmData.ThermostatData.IndoorHumidity, unit: '%', descriptionText: "${device.displayName} humidity is ${thrmData.ThermostatData.IndoorHumidity}%", isStateChange: true)
+}
+
+/**
+ * Update Thermostat values
+ */
+void updateValues(thrmValues) {
+    log2.info "updateValues - thrmValues: ${thrmValues}"
+
+    if(thrmValues.Alerts) {
+        state.alerts = thrmValues.Alerts
+    } else {
+        state.remove('alerts')
+    }
+    state.fanRunning = thrmValues.IsFanRunning
+
+    device.sendEvent(name: 'temperature', value: thrmValues.DispTemp, unit: state.tempUnit, descriptionText: "${device.displayName} temperature is ${thrmValues.DispTemp} ${state.tempUnit}", isStateChange: true)
+    device.sendEvent(name: 'humidity', value: thrmValues.IndoorHumi, unit: '%', descriptionText: "${device.displayName} humidity is ${thrmValues.IndoorHumi}%", isStateChange: true)
 }
 
 /**
  * xmlHttpRequest Post
  */
-def xPost(path) {
+def xPost(path, query=[:]) {
     log2.debug "xPost - path: ${path}"
 
     def params = [
         uri: config.uri.tccSite,
         path: path,
-        query: [page:1],
+        query: query << [page:1],
         contentType: config.header.acceptJson, // Accept
         requestContentType: config.header.contentTypeJson, // Content-Type
         headers: [
@@ -300,7 +389,7 @@ def xPost(path) {
 /**
  * Populates Authentication Cookies
  */
-boolean webAuthenticate() {
+def webAuthenticate() {
     log2.trace "webAuthenticate - user: ${userEmail}"
 
     def params = [
@@ -322,9 +411,11 @@ boolean webAuthenticate() {
     // reset all cookies
     cookieMgr.flush()
 
+    def status = 200
     try {
         httpPost(params) { resp ->
-            log2.debug "webAuthenticate - status: ${resp.status}"
+            status = resp.status
+            log2.debug "webAuthenticate - status: ${status}"
             resp.getHeaders('Set-Cookie').each { cookie ->
                 cookieMgr.process(cookie.value)
             }
@@ -332,11 +423,18 @@ boolean webAuthenticate() {
         }
     }
     catch(groovyx.net.http.HttpResponseException ex) {
-        log2.error "HttpResponseException thrown: ${ex}"
-        return false // failure
+        status = ex.getStatusCode()
+        log2.error "${ex.getResponse()} - status: ${status}"
     }
 
-    return true // success
+    return status
+}
+
+/**
+ * @return the device id of this thermostat device
+ */
+def getDeviceId() {
+    return state.deviceId
 }
 
 /**
