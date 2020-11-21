@@ -45,10 +45,9 @@ preferences {
 }
 
 @groovy.transform.Field static final Map config = [
-    version: [ '0.0.3' ],
+    version: [ '0.0.4' ],
     uri: [
-        tccSiteProd: 'https://mytotalconnectcomfort.com',
-        tccSite: 'http://192.168.120.245:8080',
+        tccSite: 'https://mytotalconnectcomfort.com',
     ],
     path: [
         portal: '/portal/',
@@ -57,7 +56,7 @@ preferences {
         glld:   '/portal/Location/GetLocationListData',
     ],
     header: [
-        userAgent:       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:82.0) Gecko/20100101 Firefox/82.0',
+        userAgent:       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.16; rv:83.0) Gecko/20100101 Firefox/83.0',
         acceptAll:       'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         acceptJson:      'application/json, text/javascript, */*; q=0.01',
         contentTypeForm: 'application/x-www-form-urlencoded',
@@ -211,21 +210,56 @@ void updated() {
 /**
  * creates child devices from the json response
  */
-void createThermostats(tstats) {
-    log2.debug "createThermostats - tstats: {tstats} - type: ${device.getTypeName()}"
+void createThermostats(thrmDataCollection) {
+    if(!isRootDevice()) return // not callable from child device
+    log2.debug "createThermostats - tstats: ${thrmDataCollection}"
 
     childDevices.each { childDevice ->
         deleteChildDevice(childDevice.deviceNetworkId)
     }
 
-    tstats.each { tstat ->
-        def childDevice = addChildDevice(device.typeName, tstat.MacID.toLowerCase(), [label:tstat.Name, isComponent:true])
-        childDevice.state.deviceId = tstat.DeviceID
-        childDevice.state.displayUnits = tstat.DisplayUnits==1 ? '°F' : '°C'
+    thrmDataCollection.each { thrmData ->
+        def childDevice = addChildDevice(device.typeName, thrmData.MacID.toLowerCase(), [label:thrmData.Name, isComponent:true])
+        childDevice.setStateParams(thrmData)
+        log.info "parent created child: ${childDevice}"
     }
 }
 
+/**
+ * Set Thermostat state params
+ */
+void setStateParams(thrmData) {
+    log2.info "setStateParams - thrmData: ${thrmData}"
 
+    state.lastUpdated = new Date()
+
+    state.deviceId = thrmData.DeviceID
+
+    def tempUnit = thrmData.ThermostatData.DisplayUnits==1 ? '°F' : '°C'
+    state.tempUnit = tempUnit
+
+    state.status = thrmData.IsAlive ? 'online' : 'offline'
+    state.modes = thrmData.ThermostatData.AllowedModes
+
+    state.coolSetpointSchedule = thrmData.ThermostatData.ScheduleCoolSp
+    state.coolSetpointRange = [thrmData.ThermostatData.MinCoolSetpoint, thrmData.ThermostatData.MaxCoolSetpoint]
+    state.heatSetpointSchedule = thrmData.ThermostatData.ScheduleHeatSp
+    state.heatSetpointRange = [thrmData.ThermostatData.MinHeatSetpoint, thrmData.ThermostatData.MaxHeatSetpoint]
+
+    if(thrmData.ThermostatData.OutdoorTemperatureAvailable) {
+        state.outdoorTemperature = thrmData.ThermostatData.OutdoorTemperature
+    }
+    if(thrmData.ThermostatData.OutdoorHumidityAvailable) {
+        state.outdoorHumidity = thrmData.ThermostatData.OutdoorHumidity
+    }
+
+    sendEvent(name: 'temperature', value: thrmData.ThermostatData.IndoorTemperature, unit: tempUnit, descriptionText: "${device.displayName} temperature is ${thrmData.ThermostatData.IndoorTemperature} ${tempUnit}", isStateChange: true)
+    sendEvent(name: 'humidity', value: thrmData.ThermostatData.IndoorHumidity, unit: '%', descriptionText: "${device.displayName} humidity is ${thrmData.ThermostatData.IndoorHumidity}%", isStateChange: true)
+}
+
+/**
+ * xmlHttpRequest Post
+ */
 def xPost(path) {
     log2.debug "xPost - path: ${path}"
 
@@ -263,6 +297,9 @@ def xPost(path) {
     return json
 }
 
+/**
+ * Populates Authentication Cookies
+ */
 boolean webAuthenticate() {
     log2.trace "webAuthenticate - user: ${userEmail}"
 
@@ -302,6 +339,13 @@ boolean webAuthenticate() {
     return true // success
 }
 
+/**
+ *  @return true if this device is the root device
+ */
+def isRootDevice() {
+    return (getParent() == null)
+}
+
 
 // cookie management
 @groovy.transform.Field Map cookieMgr = [
@@ -317,7 +361,7 @@ boolean webAuthenticate() {
     'process': { rawCookie ->
         def cookieList = cookieMgr.parse(rawCookie)
         log2.trace "cookieMgr.process - cookieList: ${cookieList}"
-        if(!cookieList) return;
+        if(!cookieList) return
         if(cookieMgr.store == null) cookieMgr.load()
 
         def pos = cookieList.first().indexOf('=')
