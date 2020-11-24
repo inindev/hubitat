@@ -45,7 +45,7 @@ preferences {
 }
 
 @groovy.transform.Field static final Map config = [
-    version: [ '0.1.0' ],
+    version: [ '0.2.0' ],
     uri: [
         tccSite: 'https://mytotalconnectcomfort.com',
     ],
@@ -85,9 +85,9 @@ void initialize() {
     if(status >= 400) {
         log2.error "initialize - webAuthenticate failed with status: ${status}"
         if(status == 401) {
-            state.error = '<span style="color:red">Web Authentication Failed: Check email and password then try again.</span>'
+            state.error = '<span style="color:red">Web Authentication Failed (401): Check email and password then try again.</span>'
         } else {
-            state.error = "<span style='color:red'>Web Authentication Failed - status: ${status}</span>"
+            state.error = "<span style='color:red'>Web Authentication Failed (${status})</span>"
         }
         return
     }
@@ -95,7 +95,7 @@ void initialize() {
     try {
         def lld = xPost(config.path.glld)?.first()
         if(!lld) {
-            state.error = "<span style='color:red'>No Location List Data returned from server!</span>"
+            state.error = "<span style='color:red'>No Location List Data returned from server</span>"
             return
         }
 
@@ -104,8 +104,8 @@ void initialize() {
     }
     catch(groovyx.net.http.HttpResponseException ex) {
         status = ex.getStatusCode()
-        log2.error "${ex.getResponse()} - status: ${status}"
-        state.error = "<span style='color:red'>Failed to fetch Location List Data - status: ${status}</span>"
+        log2.error "initialize - xPost GetLocationListData failed with status: ${status}"
+        state.error = "<span style='color:red'>Failed to fetch Location List Data (${status})</span>"
     }
 }
 
@@ -129,18 +129,14 @@ void poll() {
     }
 
     def status = pollZoneListData(state.locationId)
-    if(status == 401) {
-        status = webAuthenticate();
-        if(status >= 400) {
-            log2.error "initialize - webAuthenticate failed with status: ${status}"
-            if(status == 401) {
-                state.error = '<span style="color:red">Web Authentication Failed: Check email and password then try again.</span>'
-            } else {
-                state.error = "<span style='color:red'>Web Authentication Failed - status: ${status}</span>"
-            }
-            return
+    if(status >= 400) {
+        log2.error "poll - pollZoneListData failed with status: ${status}"
+        if(status == 401) {
+            state.error = '<span style="color:red">Web Authentication Failed (401): Check email and password then try again.</span>'
+        } else {
+            state.error = "<span style='color:red'>Zone List Data Fetch Failed (${status})</span>"
         }
-        pollZoneListData(state.locationId)
+        return
     }
 }
 
@@ -324,7 +320,7 @@ int pollZoneListData(locationId) {
     state.remove('error')
     int status = 200
     try {
-        def zld = xPost(config.path.gzld, [locationId:locationId])
+        def zld = xPostAuth(config.path.gzld, [locationId:locationId])
         if(!zld) {
             state.error = "<span style='color:red'>Poll: No Zone List Data returned from server!</span>"
             return status
@@ -349,12 +345,36 @@ int pollZoneListData(locationId) {
         }
     }
     catch(groovyx.net.http.HttpResponseException ex) {
-        status = ex.getStatusCode() // if 401 then auth & retry
+        status = ex.getStatusCode()
         log2.error "${ex.getResponse()} - status: ${status}"
         state.error = "<span style='color:red'>Poll: Failed to fetch Zone List Data - status: ${status}</span>"
     }
 
     return status
+}
+
+/**
+ * xmlHttpRequest Post with Authenticate & Retry
+ */
+def xPostAuth(path, query=[:]) {
+    try {
+        return xPost(path, query)
+    }
+    catch(groovyx.net.http.HttpResponseException ex) {
+        def status = ex.getStatusCode() // if 401 then auth & retry
+        if(status != 401) {
+            log2.error "xPostAuth - xPost failed with status: ${status}"
+            throw ex
+        }
+    }
+
+    def status = webAuthenticate();
+    if(status >= 400) {
+        log2.error "xPostAuth - webAuthenticate failed with status: ${status}"
+        throw new groovyx.net.http.HttpResponseException(status)
+    }
+
+    return xPost(path, query)
 }
 
 /**
@@ -437,7 +457,6 @@ def webAuthenticate() {
         status = ex.getStatusCode()
         log2.error "${ex.getResponse()} - status: ${status}"
     }
-
     return status
 }
 
