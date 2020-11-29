@@ -45,13 +45,12 @@ preferences {
 }
 
 @groovy.transform.Field static final Map config = [
-    version: [ '0.2.0' ],
+    version: [ '0.3.0' ],
     uri: [
         tccSite: 'https://mytotalconnectcomfort.com',
     ],
     path: [
         portal: '/portal/',
-        gzld:   '/portal/Device/GetZoneListData',
         scsc:   '/portal/Device/SubmitControlScreenChanges',
         glld:   '/portal/Location/GetLocationListData',
     ],
@@ -81,6 +80,7 @@ void initialize() {
 
     state.clear()
 
+    // force reauth
     def status = webAuthenticate();
     if(status >= 400) {
         log2.error "initialize - webAuthenticate failed with status: ${status}"
@@ -92,21 +92,12 @@ void initialize() {
         return
     }
 
-    try {
-        def lld = xPost(config.path.glld)?.first()
-        if(!lld) {
-            state.error = "<span style='color:red'>No Location List Data returned from server</span>"
-            return
-        }
+    // recreate children
+    childDevices.each { childDevice ->
+        deleteChildDevice(childDevice.deviceNetworkId)
+    }
 
-        state.locationId = lld.LocationID
-        createThermostats(lld.Devices)
-    }
-    catch(groovyx.net.http.HttpResponseException ex) {
-        status = ex.getStatusCode()
-        log2.error "initialize - xPost GetLocationListData failed with status: ${status}"
-        state.error = "<span style='color:red'>Failed to fetch Location List Data (${status})</span>"
-    }
+    locationListDataUpdate()
 }
 
 /**
@@ -122,22 +113,7 @@ void poll() {
     }
     // we are on the root object now
 
-    if(!state.locationId) {
-        log2.error 'locationId is not set, call initialize before polling'
-        state.error = '<span style="color:red">Poll: Location Id is not set, call "initialize" before polling.</span>'
-        return
-    }
-
-    def status = pollZoneListData(state.locationId)
-    if(status >= 400) {
-        log2.error "poll - pollZoneListData failed with status: ${status}"
-        if(status == 401) {
-            state.error = '<span style="color:red">Web Authentication Failed (401): Check email and password then try again.</span>'
-        } else {
-            state.error = "<span style='color:red'>Zone List Data Fetch Failed (${status})</span>"
-        }
-        return
-    }
+    locationListDataUpdate()
 }
 
 /**
@@ -266,91 +242,61 @@ void updated() {
     }
 
     if(logLevel > 2) log.info " ${device.getDisplayName()} : virtual thermostat updated - logging level: ${['none','error','warn','info','debug','trace'].getAt(logLevel)}"
-}
 
-
-/**
- * creates child devices from the json response
- */
-void createThermostats(thrmDataCollection) {
-    if(!isRootDevice()) { // not callable from child device
-        log2.error 'createThermostats called from child device'
-        return
-    }
-    log2.debug "createThermostats - tstats: ${thrmDataCollection}"
-
-    childDevices.each { childDevice ->
-        deleteChildDevice(childDevice.deviceNetworkId)
-    }
-
-    thrmDataCollection.each { thrmData ->
-        def childDevice = addChildDevice(device.typeName, thrmData.MacID.toLowerCase(), [label:thrmData.Name, isComponent:true])
-
-        def cds = [
-            lastUpdated:          new Date().toString(),
-            deviceId:             thrmData.DeviceID,
-            tempUnit:             thrmData.ThermostatData.DisplayUnits==1 ? '°F' : '°C',
-            status:               thrmData.IsAlive ? 'online' : 'offline',
-            modes:                thrmData.ThermostatData.AllowedModes,
-            coolSetpointSchedule: thrmData.ThermostatData.ScheduleCoolSp,
-            coolSetpointRange:   [thrmData.ThermostatData.MinCoolSetpoint, thrmData.ThermostatData.MaxCoolSetpoint],
-            heatSetpointSchedule: thrmData.ThermostatData.ScheduleHeatSp,
-            heatSetpointRange:   [thrmData.ThermostatData.MinHeatSetpoint, thrmData.ThermostatData.MaxHeatSetpoint],
-        ]
-        if(thrmData.ThermostatData.OutdoorTemperatureAvailable) {
-            cds.outdoorTemperature = thrmData.ThermostatData.OutdoorTemperature
-        }
-        if(thrmData.ThermostatData.OutdoorHumidityAvailable) {
-            cds.outdoorHumidity = thrmData.ThermostatData.OutdoorHumidity
-        }
-        childDevice.setState(cds)
-
-        childDevice.sendEvent(name: 'temperature', value: thrmData.ThermostatData.IndoorTemperature, unit: cds.tempUnit, descriptionText: "${childDevice.displayName} temperature is ${thrmData.ThermostatData.IndoorTemperature} ${cds.tempUnit}", isStateChange: true)
-        childDevice.sendEvent(name: 'humidity', value: thrmData.ThermostatData.IndoorHumidity, unit: '%', descriptionText: "${childDevice.displayName} humidity is ${thrmData.ThermostatData.IndoorHumidity}%", isStateChange: true)
-
-        log.info "parent created child: ${childDevice}"
-    }
+    initialize()
 }
 
 /**
- * Execute a Zone List Data refresh
- *   lightweight refresh of temperature, humidity, fan state, and alerts
+ * Execute a Location List Data refresh
  */
-int pollZoneListData(locationId) {
+void locationListDataUpdate() {
+    log2.info "locationListDataUpdate"
+
     state.remove('error')
-    int status = 200
     try {
-        def zld = xPostAuth(config.path.gzld, [locationId:locationId])
-        if(!zld) {
-            state.error = "<span style='color:red'>Poll: No Zone List Data returned from server!</span>"
-            return status
+        def lld = xPostAuth(config.path.glld)?.first()
+        if(!lld) {
+            state.error = "<span style='color:red'>No Location List Data returned from server</span>"
+            return
         }
+        log2.debug "locationListDataUpdate - lld: ${lld}"
 
-        zld.each { zd ->
-            def dev = getDeviceById(zd.DeviceID)
+        state.locationId = lld.LocationID
+        lld.Devices.each { thrmData ->
+            def dev = getDeviceById(thrmData.DeviceID)
             if(!dev) {
-                log2.error "thermostat not found - id: ${zd.DeviceID}"
-                return
+                log2.info "locationListDataUpdate - device id: ${thrmData.DeviceID} does not exist, creating thermostat: ${thrmData.Name}"
+                dev = addChildDevice(device.typeName, thrmData.MacID.toLowerCase(), [label:thrmData.Name, isComponent:true])
             }
 
-            dev.updateState([
-                lastUpdated: new Date().toString(),
-                alerts:      zd.Alerts,
-                fanRunning:  zd.IsFanRunning,
-            ]);
+            def devState = [
+                lastUpdated:          new Date().toString(),
+                deviceId:             thrmData.DeviceID,
+                tempUnit:             thrmData.ThermostatData.DisplayUnits==1 ? '°F' : '°C',
+                status:               thrmData.IsAlive ? 'online' : 'offline',
+                modes:                thrmData.ThermostatData.AllowedModes,
+                coolSetpointSchedule: thrmData.ThermostatData.ScheduleCoolSp,
+                coolSetpointRange:   [thrmData.ThermostatData.MinCoolSetpoint, thrmData.ThermostatData.MaxCoolSetpoint],
+                heatSetpointSchedule: thrmData.ThermostatData.ScheduleHeatSp,
+                heatSetpointRange:   [thrmData.ThermostatData.MinHeatSetpoint, thrmData.ThermostatData.MaxHeatSetpoint],
+            ]
+            if(thrmData.ThermostatData.OutdoorTemperatureAvailable) {
+                devState.outdoorTemperature = thrmData.ThermostatData.OutdoorTemperature
+            }
+            if(thrmData.ThermostatData.OutdoorHumidityAvailable) {
+                devState.outdoorHumidity = thrmData.ThermostatData.OutdoorHumidity
+            }
+            dev.setState(devState)
 
-            def tempUnit = dev.getState('tempUnit')
-            dev.sendEvent(name: 'temperature', value: zd.DispTemp, unit: tempUnit, descriptionText: "${dev.displayName} temperature is ${zd.DispTemp} ${tempUnit}", isStateChange: true)
-            dev.sendEvent(name: 'humidity', value: zd.IndoorHumi, unit: '%', descriptionText: "${dev.displayName} humidity is ${zd.IndoorHumi}%", isStateChange: true)
+            dev.sendEvent(name: 'temperature', value: thrmData.ThermostatData.IndoorTemperature, unit: devState.tempUnit, descriptionText: "${dev.displayName} temperature is ${thrmData.ThermostatData.IndoorTemperature} ${devState.tempUnit}", isStateChange: true)
+            dev.sendEvent(name: 'humidity', value: thrmData.ThermostatData.IndoorHumidity, unit: '%', descriptionText: "${dev.displayName} humidity is ${thrmData.ThermostatData.IndoorHumidity}%", isStateChange: true)
         }
     }
     catch(groovyx.net.http.HttpResponseException ex) {
-        status = ex.getStatusCode()
+        def status = ex.getStatusCode()
         log2.error "${ex.getResponse()} - status: ${status}"
-        state.error = "<span style='color:red'>Poll: Failed to fetch Zone List Data - status: ${status}</span>"
+        state.error = "<span style='color:red'>locationListDataUpdate - Failed to fetch Location List Data - status: ${status}</span>"
     }
-
-    return status
 }
 
 /**
