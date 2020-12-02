@@ -45,7 +45,7 @@ preferences {
 }
 
 @groovy.transform.Field static final Map config = [
-    version: [ '0.4.0' ],
+    version: [ '0.5.0' ],
     uri: [
         tccSite: 'https://mytotalconnectcomfort.com',
     ],
@@ -63,7 +63,6 @@ preferences {
         acceptLang:      'en-US,en;q=0.5',
     ],
 ]
-
 
 /**
  * Initialize::initialize - initial thermostat setup
@@ -242,9 +241,51 @@ void updated() {
         log2.info 'encrypted password updated'
     }
 
-    log2.info "virtual thermostat updated - logging level: ${['none','error','warn','info','debug','trace'].getAt(logLevel)}"
+    log2.info "virtual thermostat updated - logging level: ${['none','error','warn','info','debug','trace'].getAt(logLevel)} (${logLevel})"
 
-    initialize()
+    // auto-initialize the first time
+    if(!state.locationId) {
+        initialize()
+    }
+
+    // propogate logLevel
+    childDevices.each { childDevice ->
+        childDevice.updateSetting('logLevel', logLevel)
+    }
+}
+
+/**
+ * @params
+ *   systemSwitch    [0: emheat, 1: heat, 2: off, 3: cool] automatic
+ *   heatSetpoint    [50..90]
+ *   coolSetpoint    [50..90]
+ *   heatNextPeriod  [n 15mins from 00:00]
+ *   coolNextPeriod  [n 15mins from 00:00]
+ *   statusHeat      [0: follow schedule, 1: temporary hold, 2: permanent hold]
+ *   statusCool      [0: follow schedule, 1: temporary hold, 2: permanent hold]
+ *   fanMode         [0: auto, 1: on, 2: circulate]
+ */
+def submitControlScreen(params) {
+    log2.debug 'submitControlScreen'
+
+    if(!state.deviceId) {
+        log2.error 'deviceId is required'
+        return
+    }
+
+    state.remove('error')
+
+    def settings = "{\"DeviceID\":${state.deviceId},\"SystemSwitch\":${params.systemSwitch},\"HeatSetpoint\":${params.heatSetpoint},\"CoolSetpoint\":${params.coolSetpoint},\"HeatNextPeriod\":${params.heatNextPeriod},\"CoolNextPeriod\":${params.coolNextPeriod},\"StatusHeat\":${params.statusHeat},\"StatusCool\":${params.statusCool},\"FanMode\":${params.fanMode}}"
+    log2.debug "submitControlScreen - settings: ${settings}"
+
+    try {
+        def res = xPostAuth(config.path.scsc, null, settings)
+    }
+    catch(groovyx.net.http.HttpResponseException ex) {
+        def status = ex.getStatusCode()
+        log2.error "submitControlScreen - ${ex.getResponse()} - status: ${status}"
+        state.error = "<span style='color:red'>Failed to update thermostat settings (status: ${status})</span>"
+    }
 }
 
 /**
@@ -256,7 +297,7 @@ void locationListDataUpdate() {
     state.remove('error')
 
     try {
-        def lld = xPostAuth(config.path.glld)?.first()
+        def lld = xPostAuth(config.path.glld, [page:1])?.first()
         if(!lld) {
             state.error = "<span style='color:red'>No Location List Data returned from server</span>"
             return
@@ -272,15 +313,13 @@ void locationListDataUpdate() {
             }
 
             def devState = [
-                lastUpdated:          new Date().toString(),
-                deviceId:             thrmData.DeviceID,
-                tempUnit:             thrmData.ThermostatData.DisplayUnits==1 ? '°F' : '°C',
-                status:               thrmData.IsAlive ? 'online' : 'offline',
-                modes:                thrmData.ThermostatData.AllowedModes,
-                coolSetpointSchedule: thrmData.ThermostatData.ScheduleCoolSp,
-                coolSetpointRange:   [thrmData.ThermostatData.MinCoolSetpoint, thrmData.ThermostatData.MaxCoolSetpoint],
-                heatSetpointSchedule: thrmData.ThermostatData.ScheduleHeatSp,
-                heatSetpointRange:   [thrmData.ThermostatData.MinHeatSetpoint, thrmData.ThermostatData.MaxHeatSetpoint],
+                lastUpdated:        new Date().toString(),
+                deviceId:           thrmData.DeviceID,
+                tempUnit:           thrmData.ThermostatData.DisplayUnits==1 ? '°F' : '°C',
+                status:             thrmData.IsAlive ? 'online' : 'offline',
+                modes:              thrmData.ThermostatData.AllowedModes,
+                coolSetpointRange: [thrmData.ThermostatData.MinCoolSetpoint, thrmData.ThermostatData.MaxCoolSetpoint],
+                heatSetpointRange: [thrmData.ThermostatData.MinHeatSetpoint, thrmData.ThermostatData.MaxHeatSetpoint],
             ]
             if(thrmData.ThermostatData.OutdoorTemperatureAvailable) {
                 devState.outdoorTemperature = thrmData.ThermostatData.OutdoorTemperature
@@ -292,22 +331,28 @@ void locationListDataUpdate() {
 
             dev.sendEvent(name: 'temperature', value: thrmData.ThermostatData.IndoorTemperature, unit: devState.tempUnit, descriptionText: "${dev.displayName} temperature is ${thrmData.ThermostatData.IndoorTemperature} ${devState.tempUnit}", isStateChange: true)
             dev.sendEvent(name: 'humidity', value: thrmData.ThermostatData.IndoorHumidity, unit: '%', descriptionText: "${dev.displayName} humidity is ${thrmData.ThermostatData.IndoorHumidity}%", isStateChange: true)
-            log2.info "thermostat: ${thrmData.Name} - temperature: ${thrmData.ThermostatData.IndoorTemperature} ${devState.tempUnit} - humidity: ${thrmData.ThermostatData.IndoorHumidity}%"
+            log2.info "${thrmData.Name}: temperature: ${thrmData.ThermostatData.IndoorTemperature} ${devState.tempUnit}"
+            log2.info "${thrmData.Name}: humidity: ${thrmData.ThermostatData.IndoorHumidity}%"
+
+            dev.sendEvent(name: 'coolingSetpoint', value: thrmData.ThermostatData.ScheduleCoolSp, unit: devState.tempUnit, descriptionText: "${dev.displayName} coolingSetpoint is ${thrmData.ThermostatData.ScheduleCoolSp} ${devState.tempUnit}", isStateChange: true)
+            dev.sendEvent(name: 'heatingSetpoint', value: thrmData.ThermostatData.ScheduleHeatSp, unit: devState.tempUnit, descriptionText: "${dev.displayName} heatingSetpoint is ${thrmData.ThermostatData.ScheduleHeatSp} ${devState.tempUnit}", isStateChange: true)
+            log2.info "${thrmData.Name}: coolingSetpoint: ${thrmData.ThermostatData.ScheduleCoolSp} ${devState.tempUnit}"
+            log2.info "${thrmData.Name}: heatingSetpoint: ${thrmData.ThermostatData.ScheduleHeatSp} ${devState.tempUnit}"
         }
     }
     catch(groovyx.net.http.HttpResponseException ex) {
         def status = ex.getStatusCode()
         log2.error "locationListDataUpdate - ${ex.getResponse()} - status: ${status}"
-        state.error = "<span style='color:red'>locationListDataUpdate - Failed to fetch Location List Data - status: ${status}</span>"
+        state.error = "<span style='color:red'>Failed to fetch Location List Data (status: ${status})</span>"
     }
 }
 
 /**
  * xmlHttpRequest Post with Authenticate & Retry
  */
-def xPostAuth(path, query=[:]) {
+def xPostAuth(path, query=null, body=null) {
     try {
-        return xPost(path, query)
+        return xPost(path, query, body)
     }
     catch(groovyx.net.http.HttpResponseException ex) {
         def status = ex.getStatusCode() // if 401 then auth & retry
@@ -323,19 +368,19 @@ def xPostAuth(path, query=[:]) {
         throw new groovyx.net.http.HttpResponseException(status)
     }
 
-    return xPost(path, query)
+    return xPost(path, query, body)
 }
 
 /**
  * xmlHttpRequest Post
  */
-def xPost(path, query=[:]) {
+def xPost(path, query=null, body=null) {
     log2.debug "xPost - path: ${path}"
 
     def params = [
         uri: config.uri.tccSite,
         path: path,
-        query: query << [page:1],
+        query: query,
         contentType: config.header.acceptJson, // Accept
         requestContentType: config.header.contentTypeJson, // Content-Type
         headers: [
@@ -348,6 +393,7 @@ def xPost(path, query=[:]) {
             'Connection'      : 'keep-alive',
         ],
         textParser: true,
+        body: body,
     ]
     def cookieStr = cookieMgr.serialize()
     if(cookieStr) params.headers.Cookie = cookieStr
@@ -391,6 +437,7 @@ def webAuthenticate() {
             'Sec-GPC'        : '1',
             'Connection'     : 'keep-alive',
         ],
+        textParser: true,
         body: "timeOffset=240&UserName=${URLEncoder.encode(userId,'UTF-8')}&Password=${URLEncoder.encode(decrypt(authCrypt),'UTF-8')}&RememberMe=false",
     ]
 
@@ -465,6 +512,13 @@ def isRootDevice() {
     return (getParent() == null)
 }
 
+/**
+ *  @return root device object instance
+ */
+def getRootDevice() {
+    return getParent() ?: device
+}
+
 
 // cookie management
 @groovy.transform.Field Map cookieMgr = [
@@ -522,13 +576,13 @@ def isRootDevice() {
     },
     'load': {
         cookieMgr.store = null
-        def json = getDataValue('cookies')
+        def json = getRootDevice().getDataValue('cookies')
         log2.trace "cookieMgr.load - json: ${json}"
         try {
             def store = json ? parseJson(json) : []
             if(!store instanceof List) {
                 log2.error('cookieMgr.load - stored data value "cookies" is not a list, flushing cookies')
-                removeDataValue('cookies')
+                getRootDevice().removeDataValue('cookies')
                 return
             }
             cookieMgr.store = store.collect { it instanceof List ? it : [it, -1] }
@@ -540,12 +594,12 @@ def isRootDevice() {
     'save': {
         def json = groovy.json.JsonOutput.toJson(cookieMgr.store.collect { it.last() == -1 ? it.first() : it })
         log2.trace "cookieMgr.save - json: ${json}"
-        updateDataValue('cookies', json)
+        getRootDevice().updateDataValue('cookies', json)
     },
     'flush': {
         log2.debug 'cookieMgr.flush'
         cookieMgr.store = []
-        removeDataValue('cookies')
+        getRootDevice().removeDataValue('cookies')
     }
 ]
 
