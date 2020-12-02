@@ -45,7 +45,7 @@ preferences {
 }
 
 @groovy.transform.Field static final Map config = [
-    version: [ '0.3.0' ],
+    version: [ '0.4.0' ],
     uri: [
         tccSite: 'https://mytotalconnectcomfort.com',
     ],
@@ -69,7 +69,7 @@ preferences {
  * Initialize::initialize - initial thermostat setup
  */
 void initialize() {
-    log2.info "Initialize::initialize"
+    log2.debug 'Initialize::initialize'
 
     def parent = getParent()
     if(parent) { // called on a child, pass up to root
@@ -82,15 +82,16 @@ void initialize() {
 
     // force reauth
     def status = webAuthenticate();
-    if(status >= 400) {
+    if((status < 200) || (status >= 400)) {
         log2.error "initialize - webAuthenticate failed with status: ${status}"
         if(status == 401) {
-            state.error = '<span style="color:red">Web Authentication Failed (401): Check email and password then try again.</span>'
+            state.error = '<span style="color:red">Web Authentication Failed (status: 401): Check email and password then try again.</span>'
         } else {
-            state.error = "<span style='color:red'>Web Authentication Failed (${status})</span>"
+            state.error = "<span style='color:red'>Web Authentication Failed (status: ${status})</span>"
         }
         return
     }
+    log2.info 'initialize - authentication succeeded'
 
     // recreate children
     childDevices.each { childDevice ->
@@ -104,7 +105,7 @@ void initialize() {
  * Polling::poll - refresh thermostat values
  */
 void poll() {
-    log2.info "Polling::poll"
+    log2.debug 'Polling::poll'
 
     def parent = getParent()
     if(parent) { // called on a child, pass up to root
@@ -120,35 +121,35 @@ void poll() {
  * Thermostat::off - set thermostat mode to 'off'
  */
 void off() {
-    log2.debug "Thermostat::off"
+    log2.debug 'Thermostat::off'
     setThermostatMode('off')
 }
 /**
  * Thermostat::cool - set thermostat mode to 'cool'
  */
 void cool() {
-    log2.debug "Thermostat::cool"
+    log2.debug 'Thermostat::cool'
     setThermostatMode('cool')
 }
 /**
  * Thermostat::heat - set thermostat mode to 'heat'
  */
 void heat() {
-    log2.debug "Thermostat::heat"
+    log2.debug 'Thermostat::heat'
     setThermostatMode('heat')
 }
 /**
  * Thermostat::emergencyHeat - set thermostat mode to 'emergency heat'
  */
 void emergencyHeat() {
-    log2.debug "Thermostat::emergencyHeat"
+    log2.debug 'Thermostat::emergencyHeat'
     setThermostatMode('emergency heat')
 }
 /**
  * Thermostat::auto - set thermostat mode to 'auto'
  */
 void auto() {
-    log2.debug "Thermostat::auto"
+    log2.debug 'Thermostat::auto'
     setThermostatMode('auto')
 }
 
@@ -163,14 +164,14 @@ void fanAuto() {
  * Thermostat::fanCirculate - set fan mode to 'circulate'
  */
 void fanCirculate() {
-    log2.debug "Thermostat::fanCirculate"
+    log2.debug 'Thermostat::fanCirculate'
     setThermostatFanMode('circulate')
 }
 /**
  * Thermostat::fanOn - set fan mode to 'on'
  */
 void fanOn() {
-    log2.debug "Thermostat::fanOn"
+    log2.debug 'Thermostat::fanOn'
     setThermostatFanMode('on')
 }
 
@@ -220,13 +221,13 @@ void setThermostatMode(String mode) {
  */
 void installed() {
     device.updateSetting('logLevel', 3)
-    log.info " ${device.getDisplayName()} : virtual thermostat created"
+    log.info " ${device.getDisplayName()} — virtual thermostat created"
 }
 /**
  * Device::uninstalled - called when the device is removed
  */
 void uninstalled() {
-    log2.info "virtual thermostat uninstalled"
+    log2.info 'virtual thermostat uninstalled'
 }
 /**
  * Device::updated - called when the preferences of a device are updated
@@ -238,10 +239,10 @@ void updated() {
     if(userAuth != '*************') {
         device.updateSetting('userAuthCrypt', encrypt(userAuth))
         device.updateSetting('userAuth', '*************')
-        if(logLevel > 2) log.info " ${device.getDisplayName()} : encrypted password updated"
+        log2.info 'encrypted password updated'
     }
 
-    if(logLevel > 2) log.info " ${device.getDisplayName()} : virtual thermostat updated - logging level: ${['none','error','warn','info','debug','trace'].getAt(logLevel)}"
+    log2.info "virtual thermostat updated - logging level: ${['none','error','warn','info','debug','trace'].getAt(logLevel)}"
 
     initialize()
 }
@@ -250,9 +251,10 @@ void updated() {
  * Execute a Location List Data refresh
  */
 void locationListDataUpdate() {
-    log2.info "locationListDataUpdate"
+    log2.debug 'locationListDataUpdate'
 
     state.remove('error')
+
     try {
         def lld = xPostAuth(config.path.glld)?.first()
         if(!lld) {
@@ -265,7 +267,7 @@ void locationListDataUpdate() {
         lld.Devices.each { thrmData ->
             def dev = getDeviceById(thrmData.DeviceID)
             if(!dev) {
-                log2.info "locationListDataUpdate - device id: ${thrmData.DeviceID} does not exist, creating thermostat: ${thrmData.Name}"
+                log2.info "device id: ${thrmData.DeviceID} does not exist, creating thermostat: ${thrmData.Name}"
                 dev = addChildDevice(device.typeName, thrmData.MacID.toLowerCase(), [label:thrmData.Name, isComponent:true])
             }
 
@@ -290,11 +292,12 @@ void locationListDataUpdate() {
 
             dev.sendEvent(name: 'temperature', value: thrmData.ThermostatData.IndoorTemperature, unit: devState.tempUnit, descriptionText: "${dev.displayName} temperature is ${thrmData.ThermostatData.IndoorTemperature} ${devState.tempUnit}", isStateChange: true)
             dev.sendEvent(name: 'humidity', value: thrmData.ThermostatData.IndoorHumidity, unit: '%', descriptionText: "${dev.displayName} humidity is ${thrmData.ThermostatData.IndoorHumidity}%", isStateChange: true)
+            log2.info "thermostat: ${thrmData.Name} - temperature: ${thrmData.ThermostatData.IndoorTemperature} ${devState.tempUnit} - humidity: ${thrmData.ThermostatData.IndoorHumidity}%"
         }
     }
     catch(groovyx.net.http.HttpResponseException ex) {
         def status = ex.getStatusCode()
-        log2.error "${ex.getResponse()} - status: ${status}"
+        log2.error "locationListDataUpdate - ${ex.getResponse()} - status: ${status}"
         state.error = "<span style='color:red'>locationListDataUpdate - Failed to fetch Location List Data - status: ${status}</span>"
     }
 }
@@ -367,7 +370,13 @@ def xPost(path, query=[:]) {
  * Populates Authentication Cookies
  */
 def webAuthenticate() {
-    log2.trace "webAuthenticate - user: ${userEmail}"
+    def userId = device.getSetting('userEmail')
+    log2.debug "webAuthenticate - userEmail: ${userId}"
+    def authCrypt = device.getSetting('userAuthCrypt')
+    if(!(userId && authCrypt)){
+        log2.error "webAuthenticate - both 'userEmail' and 'userAuth' are required"
+        return 401
+    }
 
     def params = [
         uri: config.uri.tccSite,
@@ -382,7 +391,7 @@ def webAuthenticate() {
             'Sec-GPC'        : '1',
             'Connection'     : 'keep-alive',
         ],
-        body: "timeOffset=240&UserName=${URLEncoder.encode(userEmail,'UTF-8')}&Password=${URLEncoder.encode(decrypt(userAuthCrypt),'UTF-8')}&RememberMe=false",
+        body: "timeOffset=240&UserName=${URLEncoder.encode(userId,'UTF-8')}&Password=${URLEncoder.encode(decrypt(authCrypt),'UTF-8')}&RememberMe=false",
     ]
 
     // reset all cookies
@@ -401,7 +410,7 @@ def webAuthenticate() {
     }
     catch(groovyx.net.http.HttpResponseException ex) {
         status = ex.getStatusCode()
-        log2.error "${ex.getResponse()} - status: ${status}"
+        log2.error "webAuthenticate - ${ex.getResponse()} - status: ${status}"
     }
     return status
 }
@@ -542,9 +551,9 @@ def isRootDevice() {
 
 // logging
 @groovy.transform.Field Map log2 = [
-    'error': { msg -> if(logLevel > 0) log.error " ${device.getDisplayName()} : ${msg}" },
-    'warn' : { msg -> if(logLevel > 1) log.warn  " ${device.getDisplayName()} : ${msg}" },
-    'info' : { msg -> if(logLevel > 2) log.info  " ${device.getDisplayName()} : ${msg}" },
-    'debug': { msg -> if(logLevel > 3) log.debug " ${device.getDisplayName()} : ${msg}" },
-    'trace': { msg -> if(logLevel > 4) log.trace " ${device.getDisplayName()} : ${msg}" },
+    'error': { msg -> if(logLevel > 0) log.error " ${device.getDisplayName()} — ${msg}" },
+    'warn' : { msg -> if(logLevel > 1) log.warn  " ${device.getDisplayName()} — ${msg}" },
+    'info' : { msg -> if(logLevel > 2) log.info  " ${device.getDisplayName()} — ${msg}" },
+    'debug': { msg -> if(logLevel > 3) log.debug " ${device.getDisplayName()} — ${msg}" },
+    'trace': { msg -> if(logLevel > 4) log.trace " ${device.getDisplayName()} — ${msg}" },
 ]
