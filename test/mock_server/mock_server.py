@@ -44,9 +44,21 @@ class HttpRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
         request = self.request.recv(1024).decode('UTF-8')
         print(colorize_headers(request, 'request'))
-        response = get_mock_response(request)
+
+        try:
+            response = get_mock_response(request)
+        except ValueError:
+            response  = 'HTTP/1.1 400 Bad Request\r\n'
+            response += 'Content-Type: text/html\r\n\r\n'
+            response += '<html><head></head><body><h1>400 Bad Request</h1></body></html>'
+        except LookupError:
+            response  = 'HTTP/1.1 404 Not Found\r\n'
+            response += 'Content-Type: text/html\r\n\r\n'
+            response += '<html><head></head><body><h1>404 Not Found</h1></body></html>'
+
         if not response:
             raise NotImplementedError
+
         print()
         print(colorize_headers(response, 'response'))
         self.request.send(response.encode('UTF-8'))
