@@ -45,7 +45,7 @@ preferences {
 }
 
 @groovy.transform.Field static final Map config = [
-    version: [ '0.5.0' ],
+    version: [ '0.6.0' ],
     uri: [
         tccSite: 'https://mytotalconnectcomfort.com',
     ],
@@ -62,6 +62,8 @@ preferences {
         contentTypeJson: 'application/json; charset=utf-8',
         acceptLang:      'en-US,en;q=0.5',
     ],
+    fanModeMap: ['auto': 0, 'on': 1, 'circulate': 2],
+    modeMap: ['emergency heat': 0, 'heat': 1, 'off': 2, 'cool': 3],
 ]
 
 /**
@@ -204,6 +206,21 @@ void setSchedule(String schedule) {
  */
 void setThermostatFanMode(String mode) {
     log2.info "Thermostat::fanmode - mode: ${mode}"
+
+    def fanModeNum = config.fanModeMap[mode]
+    if(!fanModeNum) {
+        log2.error "thermostat does not support fan mode: ${mode} (${fanModeNum})"
+        return
+    }
+
+    def rc = submitControlScreen(fanMode: fanModeNum)
+    if(!rc) {
+        log2.error "failed to set thermostat fan mode to ${mode} (${fanModeNum})"
+        return
+    }
+
+    device.sendEvent(name: 'thermostatFanMode', value: mode, descriptionText: "${device.displayName} thermostat fan mode set to '${mode}'", isStateChange: true)
+    log2.info "Thermostat fan mode set to ${mode} (${fanModeNum})"
 }
 
 /**
@@ -212,6 +229,26 @@ void setThermostatFanMode(String mode) {
  */
 void setThermostatMode(String mode) {
     log2.info "Thermostat::setThermostatMode - mode: ${mode}"
+
+    if(!state.modes) {
+        log2.error 'thermostat has no modes defined'
+        return
+    }
+
+    def modeNum = config.modeMap[mode]
+    if(!state.modes.contains(modeNum)) {
+        log2.error "thermostat does not support mode: ${mode} (${modeNum})"
+        return
+    }
+
+    def rc = submitControlScreen(systemSwitch: modeNum)
+    if(!rc) {
+        log2.error "failed to set thermostat mode to ${mode} (${modeNum})"
+        return
+    }
+
+    device.sendEvent(name: 'thermostatMode', value: mode, descriptionText: "${device.displayName} thermostat mode set to '${mode}'", isStateChange: true)
+    log2.info "Thermostat mode set to ${mode} (${modeNum})"
 }
 
 
@@ -270,7 +307,7 @@ def submitControlScreen(params) {
 
     if(!state.deviceId) {
         log2.error 'deviceId is required'
-        return
+        return false
     }
 
     state.remove('error')
@@ -279,13 +316,21 @@ def submitControlScreen(params) {
     log2.debug "submitControlScreen - settings: ${settings}"
 
     try {
-        def res = xPostAuth(config.path.scsc, null, settings)
+        def rc = xPostAuth(config.path.scsc, null, settings)?.get('success')
+        if(rc && (rc != 1)) {
+            log2.error "submitControlScreen - failed to update thermostat settings - rc: ${rc}"
+            state.error = "<span style='color:red'>Failed to update thermostat settings (rc: ${rc})</span>"
+            return false
+        }
     }
     catch(groovyx.net.http.HttpResponseException ex) {
         def status = ex.getStatusCode()
         log2.error "submitControlScreen - ${ex.getResponse()} - status: ${status}"
         state.error = "<span style='color:red'>Failed to update thermostat settings (status: ${status})</span>"
+        return false
     }
+
+    return true
 }
 
 /**
