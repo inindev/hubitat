@@ -245,7 +245,9 @@ def createSwitches(int num) {
     labelNames.each { i, label ->
         def name = "${device.name} - Child${i}"
         log2.info "creating child device: ${name}"
-        addChildDevice(device.typeName, "${dni}-${i}", [name:name, label:label, isComponent:true])
+        def childDevice = addChildDevice(device.typeName, "${dni}-${i}", [label:label, isComponent:true])
+        childDevice.updateSetting('logInfo', logDebug ?: logInfo)
+        childDevice.updateSetting('logDebug', logDebug)
     }
 
     if (num > 1) {
