@@ -157,10 +157,10 @@ def parse(msg) {
                 return;
             }
 
-            dev.sendEvent(name: 'switch', value: val, descriptionText: "${dev.displayName} switch is ${val}", isStateChange: true)
+            dev.sendEvent(name: 'switch', value: val, descriptionText: "${dev.displayName} switch is ${val}")
             if (dev.hasCapability('ContactSensor')) {
                 def oc = val.equals('on') ? 'open' : 'closed'
-                dev.sendEvent(name: 'contact', value: oc, descriptionText: "${dev.displayName} contacts are ${oc}", isStateChange: true)
+                dev.sendEvent(name: 'contact', value: oc, descriptionText: "${dev.displayName} contacts are ${oc}")
             }
         }
 
@@ -168,20 +168,20 @@ def parse(msg) {
         else if (key.equals('energy')) {
             if (device.hasCapability('EnergyMeter')) {
                 def energy = val['Total']
-                device.sendEvent(name: 'energy', value: energy, unit: 'kWh', descriptionText: "${device.displayName} energy is ${energy} kWh", isStateChange: true)
+                device.sendEvent(name: 'energy', value: energy, unit: 'kWh', descriptionText: "${device.displayName} energy is ${energy} kWh")
 
                 def totalStartTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss", val['TotalStartTime'])
                 def energyDuration = (now() - totalStartTime.getTime()) / 86400000 // 1000 * 3600 * 24
                 def energyDurationStr = String.format("%.3f", energyDuration)
-                device.sendEvent(name: 'energyDuration', value: energyDurationStr, unit: 'Days', descriptionText: "${device.displayName} energyDuration is ${energyDurationStr} Days", isStateChange: true)
+                device.sendEvent(name: 'energyDuration', value: energyDurationStr, unit: 'Days', descriptionText: "${device.displayName} energyDuration is ${energyDurationStr} Days")
             }
             if (device.hasCapability('PowerMeter')) {
                 def power = val['Power']
-                device.sendEvent(name: 'power', value: power, unit: 'W', descriptionText: "${device.displayName} power is ${power} W", isStateChange: true)
+                device.sendEvent(name: 'power', value: power, unit: 'W', descriptionText: "${device.displayName} power is ${power} W")
             }
             if (device.hasCapability('VoltageMeasurement')) {
                 def voltage = val['Voltage']
-                device.sendEvent(name: 'voltage', value: voltage, unit: 'V', descriptionText: "${device.displayName} voltage is ${voltage} V", isStateChange: true)
+                device.sendEvent(name: 'voltage', value: voltage, unit: 'V', descriptionText: "${device.displayName} voltage is ${voltage} V")
             }
         }
 
@@ -193,18 +193,18 @@ def parse(msg) {
         else if (key.equals('si7021')) {
             if (device.hasCapability('RelativeHumidityMeasurement')) {
                 def humid = val['Humidity']
-                device.sendEvent(name: 'humidity', value: humid, unit: '%', descriptionText: "${device.displayName} humidity is ${humid}%", isStateChange: true)
+                device.sendEvent(name: 'humidity', value: humid, unit: '%', descriptionText: "${device.displayName} humidity is ${humid}%")
             }
             if (device.hasCapability('TemperatureMeasurement')) {
                 def temp = val['Temperature']
-                device.sendEvent(name: 'temperature', value: temp, unit: tempUnit, descriptionText: "${device.displayName} temperature is ${temp} ${tempUnit}", isStateChange: true)
+                device.sendEvent(name: 'temperature', value: temp, unit: tempUnit, descriptionText: "${device.displayName} temperature is ${temp} ${tempUnit}")
             }
         }
         // ds18b20: temperature
         else if (key.equals('ds18b20')) {
             if (device.hasCapability('TemperatureMeasurement')) {
                 def temp = val['Temperature']
-                device.sendEvent(name: 'temperature', value: temp, unit: tempUnit, descriptionText: "${device.displayName} temperature is ${temp} ${tempUnit}", isStateChange: true)
+                device.sendEvent(name: 'temperature', value: temp, unit: tempUnit, descriptionText: "${device.displayName} temperature is ${temp} ${tempUnit}")
             }
         }
 
@@ -249,7 +249,7 @@ def createSwitches(int num) {
     }
 
     if (num > 1) {
-        device.sendEvent(name: 'switch', value: ' ', descriptionText: 'reset composite device state', isStateChange: true)
+        device.sendEvent(name: 'switch', value: ' ', descriptionText: 'reset composite device state')
     }
 }
 
