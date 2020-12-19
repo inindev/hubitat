@@ -1,19 +1,19 @@
-From 6cbffc0547c434b495ffa023772c14ba175c69d6 Mon Sep 17 00:00:00 2001
+From 1e147ae0bf912e73eba52cad9995f8fe1632876f Mon Sep 17 00:00:00 2001
 From: John Clark <inindev@gmail.com>
-Date: Sat, 7 Nov 2020 06:23:03 -0500
-Subject: [PATCH] Reboot of Eric Maycock's Tasmota-Hubitat integration:
- github.com/erocm123/Sonoff-Tasmota
+Date: Sat, 19 Dec 2020 14:18:12 -0500
+Subject: [PATCH] Reboot of Eric Maycock's Tasmota-Hubitat integration for
+ Tasmota 9.1.0   see: github.com/erocm123/Sonoff-Tasmota
 
 ---
  tasmota/i18n.h                |   5 +
  tasmota/language/en_GB.h      |   5 +
  tasmota/my_user_config.h      |   4 +
- tasmota/settings.h            |   9 +-
+ tasmota/settings.h            |  11 +-
  tasmota/settings.ino          |   4 +
  tasmota/xdrv_01_webserver.ino |   4 +
  tasmota/xdrv_02_mqtt.ino      |   3 +
  tasmota/xdrv_88_hubitat.ino   | 189 ++++++++++++++++++++++++++++++++++
- 8 files changed, 220 insertions(+), 3 deletions(-)
+ 8 files changed, 222 insertions(+), 3 deletions(-)
  create mode 100644 tasmota/xdrv_88_hubitat.ino
 
 diff --git a/tasmota/i18n.h b/tasmota/i18n.h
@@ -71,7 +71,7 @@ index b2200e29..2b541739 100644
  #define MQTT_USE               true              // [SetOption3] Select default MQTT use (false = Off, true = On)
  
 diff --git a/tasmota/settings.h b/tasmota/settings.h
-index 806c3386..5bdcf4d6 100644
+index 806c3386..6d710b45 100644
 --- a/tasmota/settings.h
 +++ b/tasmota/settings.h
 @@ -148,7 +148,7 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
@@ -83,17 +83,19 @@ index 806c3386..5bdcf4d6 100644
      uint32_t spare09 : 1;                  // bit 9
      uint32_t spare10 : 1;                  // bit 10
      uint32_t spare11 : 1;                  // bit 11
-@@ -636,8 +636,11 @@ struct {
+@@ -636,8 +636,13 @@ struct {
    uint16_t      energy_power_delta[3];     // F44
    uint16_t      shutter_pwmrange[2][MAX_SHUTTERS];  // F4A
    uint8_t       dimmer_step;               // F5A
 -  
 -  uint8_t       free_f5b[88];              // F5B - Decrement if adding new Setting variables just above and below
 +
-+  uint8_t       free_f5b[53];              // F5B - Decrement if adding new Setting variables just above and below
++  uint8_t       free_f5b[25];              // F5B - Decrement if adding new Setting variables just above and below
 +
 +  char          hubitat_host[33];          // F90
 +  uint16_t      hubitat_port;              // FB1
++
++  uint8_t       free_f97[28];              // F97 - Decrement if adding new Setting variables just above and below
  
    // Only 32 bit boundary variables below
    SysBitfield5  flag5;                     // FB4
@@ -351,5 +353,5 @@ index 00000000..f8542d37
 +  return result;
 +}
 -- 
-2.24.3 (Apple Git-128)
+2.29.2
 
