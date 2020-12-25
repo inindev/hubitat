@@ -26,8 +26,8 @@ wget https://raw.githubusercontent.com/inindev/hubitat/main/tasmota/0001-Reboot-
 
 git clone https://github.com/arendst/Tasmota.git
 cd Tasmota
-git checkout master
-git apply ../0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration.patch
+git checkout pre-release-9.2.0
+git apply ../0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration-920.patch
 
 platformio run -e tasmota-lite
 
