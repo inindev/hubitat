@@ -17,17 +17,17 @@ Eric's approach eliminates the need for an MQTT broker and also creates a near i
 
 The code provided in this repository is a derivative work that modernizes and simplifies Eric's integration strategy to better fit my own needs.  UDP auto-discovery has been removed, and the previous Hubitat drivers and application for Sonoff have been reduced to a single driver: github.com/inindev/hubitat/blob/main/drivers/tasmota_device.groovy
 
-The Tasmota changes are also provided as a patchset to the 9.1.0 release: github.com/inindev/hubitat/blob/main/tasmota/0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration-920.patch
+The Tasmota changes are provided as a patchset to the 9.3.0 release: github.com/inindev/hubitat/blob/main/tasmota/0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration-930.patch
 
 To use this patchset:
 
 ```
-wget https://raw.githubusercontent.com/inindev/hubitat/main/tasmota/0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration-920.patch
+wget https://raw.githubusercontent.com/inindev/hubitat/main/tasmota/0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration-930.patch
 
 git clone https://github.com/arendst/Tasmota.git
 cd Tasmota
-git checkout pre-release-9.2.0
-git apply ../0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration-920.patch
+git checkout pre-release-9.3.0
+git apply ../0001-Reboot-Eric-Maycock-Tasmota-Hubitat-integration-930.patch
 
 platformio run -e tasmota-lite
 
