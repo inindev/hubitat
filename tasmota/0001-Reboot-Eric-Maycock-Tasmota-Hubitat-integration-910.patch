@@ -1,23 +1,23 @@
-From 1e147ae0bf912e73eba52cad9995f8fe1632876f Mon Sep 17 00:00:00 2001
+From ee96495be788cd66c390c901042b5c9ca9b4e01d Mon Sep 17 00:00:00 2001
 From: John Clark <inindev@gmail.com>
-Date: Sat, 19 Dec 2020 14:18:12 -0500
+Date: Sat, 27 Feb 2021 08:04:11 -0500
 Subject: [PATCH] Reboot of Eric Maycock's Tasmota-Hubitat integration for
- Tasmota 9.1.0   see: github.com/erocm123/Sonoff-Tasmota
+ Tasmota 9.1.0    see: github.com/erocm123/Sonoff-Tasmota
 
 ---
  tasmota/i18n.h                |   5 +
- tasmota/language/en_GB.h      |   5 +
- tasmota/my_user_config.h      |   4 +
+ tasmota/language/en_GB.h      |   8 ++
+ tasmota/my_user_config.h      |   6 +-
  tasmota/settings.h            |  11 +-
  tasmota/settings.ino          |   4 +
- tasmota/xdrv_01_webserver.ino |   4 +
+ tasmota/xdrv_01_webserver.ino |  11 ++
  tasmota/xdrv_02_mqtt.ino      |   3 +
  tasmota/xdrv_88_hubitat.ino   | 189 ++++++++++++++++++++++++++++++++++
- 8 files changed, 222 insertions(+), 3 deletions(-)
+ 8 files changed, 233 insertions(+), 4 deletions(-)
  create mode 100644 tasmota/xdrv_88_hubitat.ino
 
 diff --git a/tasmota/i18n.h b/tasmota/i18n.h
-index 8bcd461e..2ff9f4d6 100644
+index 8bcd461ee..2ff9f4d65 100644
 --- a/tasmota/i18n.h
 +++ b/tasmota/i18n.h
 @@ -647,6 +647,10 @@
@@ -40,15 +40,18 @@ index 8bcd461e..2ff9f4d6 100644
  #define D_LOG_OTHER "OTH: "        // Other
  #define D_LOG_RESULT "RSL: "       // Result
 diff --git a/tasmota/language/en_GB.h b/tasmota/language/en_GB.h
-index 2a17d14a..af9a2bfc 100644
+index 2a17d14a8..630e575cd 100644
 --- a/tasmota/language/en_GB.h
 +++ b/tasmota/language/en_GB.h
-@@ -478,6 +478,11 @@
+@@ -478,6 +478,14 @@
  #define D_DEVICE_INPUT "Input"
  #define D_DEVICE_OUTPUT "Output"
  
 +// xdrv_88_hubitat.ino
 +#define D_CONFIGURE_HUBITAT "Configure Hubitat"
++#define D_HUBITAT "Hubitat"
++#define D_HUBITAT_HOST "Hubitat Host"
++#define D_HUBITAT_PORT "Hubitat Port"
 +#define D_HUBITAT_PARAMETERS "Hubitat parameters"
 +#define D_HUBITAT_ENABLE "Hubitat enable"
 +
@@ -56,10 +59,10 @@ index 2a17d14a..af9a2bfc 100644
  #define D_SENSOR_BUSY "Sensor busy"
  #define D_SENSOR_CRC_ERROR "Sensor CRC error"
 diff --git a/tasmota/my_user_config.h b/tasmota/my_user_config.h
-index b2200e29..2b541739 100644
+index b2200e29c..d4c5aa4df 100644
 --- a/tasmota/my_user_config.h
 +++ b/tasmota/my_user_config.h
-@@ -93,6 +93,10 @@
+@@ -93,8 +93,12 @@
  #define OTA_URL                "http://ota.tasmota.com/tasmota/release/tasmota.bin.gz"  // [OtaUrl]
  #define OTA_COMPATIBILITY      false             // [SetOption78] Disable OTA compatibility check
  
@@ -68,21 +71,24 @@ index b2200e29..2b541739 100644
 +#define HUBITAT_PORT           39501             // [HubitatPort]
 +
  // -- MQTT ----------------------------------------
- #define MQTT_USE               true              // [SetOption3] Select default MQTT use (false = Off, true = On)
+-#define MQTT_USE               true              // [SetOption3] Select default MQTT use (false = Off, true = On)
++#define MQTT_USE               false             // [SetOption3] Select default MQTT use (false = Off, true = On)
  
+ #define MQTT_HOST              ""                // [MqttHost]
+ #define MQTT_FINGERPRINT1      0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00  // [MqttFingerprint1] (auto-learn)
 diff --git a/tasmota/settings.h b/tasmota/settings.h
-index 806c3386..6d710b45 100644
+index 806c3386f..f9889cb8f 100644
 --- a/tasmota/settings.h
 +++ b/tasmota/settings.h
-@@ -148,7 +148,7 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
-     uint32_t spare05 : 1;                  // bit 5
-     uint32_t spare06 : 1;                  // bit 6
-     uint32_t spare07 : 1;                  // bit 7
--    uint32_t spare08 : 1;                  // bit 8
-+    uint32_t hubitat_enabled : 1;          // bit 8 (v9.1.0.0)
-     uint32_t spare09 : 1;                  // bit 9
-     uint32_t spare10 : 1;                  // bit 10
-     uint32_t spare11 : 1;                  // bit 11
+@@ -171,7 +171,7 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
+     uint32_t spare28 : 1;                  // bit 28
+     uint32_t spare29 : 1;                  // bit 29
+     uint32_t spare30 : 1;                  // bit 30
+-    uint32_t spare31 : 1;                  // bit 31
++    uint32_t hubitat_enabled : 1;          // bit 31 (v9.1.0.0)
+   };
+ } SysBitfield5;
+ 
 @@ -636,8 +636,13 @@ struct {
    uint16_t      energy_power_delta[3];     // F44
    uint16_t      shutter_pwmrange[2][MAX_SHUTTERS];  // F4A
@@ -92,15 +98,15 @@ index 806c3386..6d710b45 100644
 +
 +  uint8_t       free_f5b[25];              // F5B - Decrement if adding new Setting variables just above and below
 +
-+  char          hubitat_host[33];          // F90
-+  uint16_t      hubitat_port;              // FB1
++  char          hubitat_host[33];          // F74
++  uint16_t      hubitat_port;              // F95
 +
 +  uint8_t       free_f97[28];              // F97 - Decrement if adding new Setting variables just above and below
  
    // Only 32 bit boundary variables below
    SysBitfield5  flag5;                     // FB4
 diff --git a/tasmota/settings.ino b/tasmota/settings.ino
-index 3fe1809b..85bc6b2d 100644
+index 3fe1809b3..85bc6b2d6 100644
 --- a/tasmota/settings.ino
 +++ b/tasmota/settings.ino
 @@ -845,6 +845,10 @@ void SettingsDefaultSet2(void)
@@ -115,7 +121,7 @@ index 3fe1809b..85bc6b2d 100644
    flag.mqtt_enabled |= MQTT_USE;
    flag.mqtt_response |= MQTT_RESULT_COMMAND;
 diff --git a/tasmota/xdrv_01_webserver.ino b/tasmota/xdrv_01_webserver.ino
-index fe7660b6..b52dceb5 100644
+index fe7660b62..2b3400d63 100644
 --- a/tasmota/xdrv_01_webserver.ino
 +++ b/tasmota/xdrv_01_webserver.ino
 @@ -720,6 +720,8 @@ const char HTTP_FORM_OTHER[] PROGMEM =
@@ -131,7 +137,7 @@ index fe7660b6..b52dceb5 100644
    strlcpy(stemp, TasmotaGlobal.mqtt_data, sizeof(stemp));  // Get JSON template
    WSContentSend_P(HTTP_FORM_OTHER, stemp, (USER_MODULE == Settings.module) ? " checked disabled" : "",
      (Settings.flag.mqtt_enabled) ? " checked" : "",   // SetOption3 - Enable MQTT
-+    (Settings.flag5.hubitat_enabled) ? " checked" : "",   // SetOption122 - Enable Hubitat
++    (Settings.flag5.hubitat_enabled) ? " checked" : "",   // SetOption145 - Enable Hubitat
      SettingsText(SET_FRIENDLYNAME1), SettingsText(SET_DEVICENAME));
  
    uint32_t maxfn = (TasmotaGlobal.devices_present > MAX_FRIENDLYNAMES) ? MAX_FRIENDLYNAMES : (!TasmotaGlobal.devices_present) ? 1 : TasmotaGlobal.devices_present;
@@ -139,12 +145,26 @@ index fe7660b6..b52dceb5 100644
    WebGetArg("wp", tmp, sizeof(tmp));
    SettingsUpdateText(SET_WEBPWD, (!strlen(tmp)) ? "" : (strchr(tmp,'*')) ? SettingsText(SET_WEBPWD) : tmp);
    Settings.flag.mqtt_enabled = Webserver->hasArg("b1");  // SetOption3 - Enable MQTT
-+  Settings.flag5.hubitat_enabled = Webserver->hasArg("h1");  // SetOption122 - Enable Hubitat
++  Settings.flag5.hubitat_enabled = Webserver->hasArg("h1");  // SetOption145 - Enable Hubitat
  #ifdef USE_EMULATION
    UdpDisconnect();
  #if defined(USE_EMULATION_WEMO) || defined(USE_EMULATION_HUE)
+@@ -2551,6 +2555,13 @@ void HandleInformation(void)
+     WSContentSend_P(PSTR("}1" D_MQTT "}2" D_DISABLED));
+   }
+   WSContentSend_P(PSTR("}1}2&nbsp;"));  // Empty line
++  if (Settings.flag5.hubitat_enabled) {  // SetOption145 - Enable Hubitat
++    WSContentSend_P(PSTR("}1" D_HUBITAT_HOST "}2%s"), Settings.hubitat_host);
++    WSContentSend_P(PSTR("}1" D_HUBITAT_PORT "}2%d"), Settings.mqtt_port);
++  } else {
++    WSContentSend_P(PSTR("}1" D_HUBITAT "}2" D_DISABLED));
++  }
++  WSContentSend_P(PSTR("}1}2&nbsp;"));  // Empty line
+ 
+ #ifdef USE_EMULATION
+   WSContentSend_P(PSTR("}1" D_EMULATION "}2%s"), GetTextIndexed(stopic, sizeof(stopic), Settings.flag2.emulation, kEmulationOptions));
 diff --git a/tasmota/xdrv_02_mqtt.ino b/tasmota/xdrv_02_mqtt.ino
-index 857857d5..5849d98c 100644
+index 857857d5f..5849d98c8 100644
 --- a/tasmota/xdrv_02_mqtt.ino
 +++ b/tasmota/xdrv_02_mqtt.ino
 @@ -315,6 +315,9 @@ void MqttPublish(const char* topic, bool retained)
@@ -159,7 +179,7 @@ index 857857d5..5849d98c 100644
        snprintf_P(slog_type, sizeof(slog_type), PSTR(D_LOG_MQTT));
 diff --git a/tasmota/xdrv_88_hubitat.ino b/tasmota/xdrv_88_hubitat.ino
 new file mode 100644
-index 00000000..f8542d37
+index 000000000..369bc2df4
 --- /dev/null
 +++ b/tasmota/xdrv_88_hubitat.ino
 @@ -0,0 +1,189 @@
@@ -297,7 +317,7 @@ index 00000000..f8542d37
 +  strlcpy(Settings.hubitat_host, (!strlen(tmp)) ? HUBITAT_HOST : (!strcmp(tmp,"0")) ? "" : tmp, sizeof(Settings.hubitat_host));
 +  WebGetArg("hp", tmp, sizeof(tmp));
 +  Settings.hubitat_port = (!strlen(tmp)) ? HUBITAT_PORT : atoi(tmp);
-+  AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_HUBITAT "Hubitat host %s, port %d"), Settings.hubitat_host, Settings.hubitat_port);
++  AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_HUBITAT D_CMND_HUBITATHOST " %s, " D_CMND_HUBITATPORT " %d"), Settings.hubitat_host, Settings.hubitat_port);
 +}
 +#endif  // USE_WEBSERVER
 +
@@ -353,5 +373,5 @@ index 00000000..f8542d37
 +  return result;
 +}
 -- 
-2.29.2
+2.20.1
 
