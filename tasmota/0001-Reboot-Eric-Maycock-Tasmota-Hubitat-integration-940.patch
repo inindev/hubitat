@@ -1,0 +1,372 @@
+From d1929bf6b33b757428334cd91296152f53b809d7 Mon Sep 17 00:00:00 2001
+From: John Clark <inindev@gmail.com>
+Date: Sun, 9 May 2021 15:17:04 -0400
+Subject: [PATCH] Reboot of Eric Maycock's Tasmota-Hubitat integration for
+ Tasmota 9.4.0    see: github.com/erocm123/Sonoff-Tasmota
+
+---
+ tasmota/i18n.h                |   5 +
+ tasmota/language/en_GB.h      |   8 ++
+ tasmota/my_user_config.h      |   6 +-
+ tasmota/settings.h            |   7 +-
+ tasmota/settings.ino          |   4 +
+ tasmota/xdrv_01_webserver.ino |  12 +++
+ tasmota/xdrv_02_mqtt.ino      |   3 +
+ tasmota/xdrv_88_hubitat.ino   | 187 ++++++++++++++++++++++++++++++++++
+ 8 files changed, 229 insertions(+), 3 deletions(-)
+ create mode 100644 tasmota/xdrv_88_hubitat.ino
+
+diff --git a/tasmota/i18n.h b/tasmota/i18n.h
+index 3fe877cb7..cc737a43b 100644
+--- a/tasmota/i18n.h
++++ b/tasmota/i18n.h
+@@ -692,6 +692,10 @@
+ #define D_CMND_BR_RESET "Reset"
+ #define D_BR_NOT_STARTED  "Berry not started"
+ 
++// Commands xdrv_88_hubitat.ino
++#define D_CMND_HUBITATHOST "HubitatHost"
++#define D_CMND_HUBITATPORT "HubitatPort"
++
+ // Commands xsns_02_analog.ino
+ #define D_CMND_ADCPARAM "AdcParam"
+ 
+@@ -718,6 +722,7 @@
+ #define D_LOG_DSB "DSB: "          // DS18xB20 sensor
+ #define D_LOG_HTTP "HTP: "         // HTTP webserver
+ #define D_LOG_HRE "HRE: "
++#define D_LOG_HUBITAT "HUB: "      // Hubitat
+ #define D_LOG_I2C "I2C: "          // I2C
+ #define D_LOG_IRR "IRR: "          // Infra Red Received
+ #define D_LOG_KNX "KNX: "
+diff --git a/tasmota/language/en_GB.h b/tasmota/language/en_GB.h
+index 0e1e073fb..5c495fb2a 100644
+--- a/tasmota/language/en_GB.h
++++ b/tasmota/language/en_GB.h
+@@ -516,6 +516,14 @@
+ #define D_DEVICE_INPUT "Input"
+ #define D_DEVICE_OUTPUT "Output"
+ 
++// xdrv_88_hubitat.ino
++#define D_CONFIGURE_HUBITAT "Configure Hubitat"
++#define D_HUBITAT "Hubitat"
++#define D_HUBITAT_HOST "Hubitat Host"
++#define D_HUBITAT_PORT "Hubitat Port"
++#define D_HUBITAT_PARAMETERS "Hubitat parameters"
++#define D_HUBITAT_ENABLE "Hubitat enable"
++
+ // xsns_05_ds18b20.ino
+ #define D_SENSOR_BUSY "Sensor busy"
+ #define D_SENSOR_CRC_ERROR "Sensor CRC error"
+diff --git a/tasmota/my_user_config.h b/tasmota/my_user_config.h
+index b7147058b..650ee59e8 100644
+--- a/tasmota/my_user_config.h
++++ b/tasmota/my_user_config.h
+@@ -98,8 +98,12 @@
+ #define OTA_URL                "http://ota.tasmota.com/tasmota32/release/tasmota32.bin"  // [OtaUrl]
+ #endif  // ESP32
+ 
++// -- Hubitat -------------------------------------
++#define HUBITAT_HOST           ""                // [HubitatHost]
++#define HUBITAT_PORT           39501             // [HubitatPort]
++
+ // -- MQTT ----------------------------------------
+-#define MQTT_USE               true              // [SetOption3] Select default MQTT use (false = Off, true = On)
++#define MQTT_USE               false             // [SetOption3] Select default MQTT use (false = Off, true = On)
+ 
+ #define MQTT_KEEPALIVE         30                // [MqttKeepAlive]
+ #define MQTT_SOCKET_TIMEOUT    4                 // [MqttTimeout]
+diff --git a/tasmota/settings.h b/tasmota/settings.h
+index 8388bb81d..89a4e6868 100644
+--- a/tasmota/settings.h
++++ b/tasmota/settings.h
+@@ -170,7 +170,7 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
+     uint32_t spare28 : 1;                  // bit 28
+     uint32_t spare29 : 1;                  // bit 29
+     uint32_t spare30 : 1;                  // bit 30
+-    uint32_t spare31 : 1;                  // bit 31
++    uint32_t hubitat_enabled : 1;          // bit 31 (v9.1.0.0)
+   };
+ } SysBitfield5;
+ 
+@@ -694,7 +694,10 @@ struct {
+   uint16_t      shd_warmup_brightness;     // F5C
+   uint8_t       shd_warmup_time;           // F5E
+ 
+-  uint8_t       free_f5f[69];              // F5F - Decrement if adding new Setting variables just above and below
++  uint8_t       free_f5f[21];              // F5F - Decrement if adding new Setting variables just above and below
++  char          hubitat_host[34];          // F74
++  uint16_t      hubitat_port;              // F96
++  uint8_t       free_f98[12];              // F98 - Decrement if adding new Setting variables just above and below
+ 
+   // Only 32 bit boundary variables below
+ 
+diff --git a/tasmota/settings.ino b/tasmota/settings.ino
+index 3eb10d608..a55831105 100644
+--- a/tasmota/settings.ino
++++ b/tasmota/settings.ino
+@@ -829,6 +829,10 @@ void SettingsDefaultSet2(void) {
+   // Switch
+   for (uint32_t i = 0; i < MAX_SWITCHES_SET; i++) { Settings.switchmode[i] = SWITCH_MODE; }
+ 
++  // Hubitat
++  strlcpy(Settings.hubitat_host, HUBITAT_HOST, sizeof(Settings.hubitat_host));
++  Settings.hubitat_port = HUBITAT_PORT;
++
+   // MQTT
+   flag.mqtt_enabled |= MQTT_USE;
+   flag.mqtt_response |= MQTT_RESULT_COMMAND;
+diff --git a/tasmota/xdrv_01_webserver.ino b/tasmota/xdrv_01_webserver.ino
+index 1e1dece40..7013c3bf7 100644
+--- a/tasmota/xdrv_01_webserver.ino
++++ b/tasmota/xdrv_01_webserver.ino
+@@ -310,6 +310,8 @@ const char HTTP_FORM_OTHER[] PROGMEM =
+   "<br>"
+   "<label><input id='b1' type='checkbox'%s><b>" D_MQTT_ENABLE "</b></label><br>"
+   "<br>"
++  "<label><input id='h1' type='checkbox'%s><b>" D_HUBITAT_ENABLE "</b></label><br>"
++  "<br>"
+   "<label><b>" D_DEVICE_NAME "</b> (%s)</label><br><input id='dn' placeholder=\"\" value=\"%s\"><br>"
+   "<br>";
+ 
+@@ -2086,6 +2088,7 @@ void HandleOtherConfiguration(void) {
+   strlcpy(stemp, TasmotaGlobal.mqtt_data, sizeof(stemp));  // Get JSON template
+   WSContentSend_P(HTTP_FORM_OTHER, stemp, (USER_MODULE == Settings.module) ? PSTR(" checked disabled") : "",
+     (Settings.flag.mqtt_enabled) ? PSTR(" checked") : "",   // SetOption3 - Enable MQTT
++    (Settings.flag5.hubitat_enabled) ? PSTR(" checked") : "",   // SetOption145 - Enable Hubitat
+     SettingsText(SET_FRIENDLYNAME1), SettingsText(SET_DEVICENAME));
+ 
+   uint32_t maxfn = (TasmotaGlobal.devices_present > MAX_FRIENDLYNAMES) ? MAX_FRIENDLYNAMES : (!TasmotaGlobal.devices_present) ? 1 : TasmotaGlobal.devices_present;
+@@ -2140,6 +2143,8 @@ void OtherSaveSettings(void) {
+     Webserver->hasArg(F("b1")),               // SetOption3 - Enable MQTT
+     (!strlen(tmp1)) ? "\"" : tmp1);
+ 
++  Settings.flag5.hubitat_enabled = Webserver->hasArg(F("h1"));  // SetOption145 - Enable Hubitat
++
+   char webindex[5];
+   for (uint32_t i = 0; i < MAX_FRIENDLYNAMES; i++) {
+     snprintf_P(webindex, sizeof(webindex), PSTR("a%d"), i);
+@@ -2340,6 +2345,13 @@ void HandleInformation(void)
+   } else {
+     WSContentSend_P(PSTR("}1" D_MQTT "}2" D_DISABLED));
+   }
++  WSContentSend_P(PSTR("}1}2&nbsp;"));  // Empty line
++  if (Settings.flag5.hubitat_enabled) {  // SetOption145 - Enable Hubitat
++    WSContentSend_P(PSTR("}1" D_HUBITAT_HOST "}2%s"), Settings.hubitat_host);
++    WSContentSend_P(PSTR("}1" D_HUBITAT_PORT "}2%d"), Settings.hubitat_port);
++  } else {
++    WSContentSend_P(PSTR("}1" D_HUBITAT "}2" D_DISABLED));
++  }
+ 
+ #if defined(USE_EMULATION) || defined(USE_DISCOVERY)
+   WSContentSend_P(PSTR("}1}2&nbsp;"));  // Empty line
+diff --git a/tasmota/xdrv_02_mqtt.ino b/tasmota/xdrv_02_mqtt.ino
+index b72cc671c..ad1010ff6 100644
+--- a/tasmota/xdrv_02_mqtt.ino
++++ b/tasmota/xdrv_02_mqtt.ino
+@@ -334,6 +334,9 @@ void MqttPublish(const char* topic, bool retained) {
+   ShowFreeMem(PSTR("MqttPublish"));
+ #endif
+ 
++  // publish hook for Hubitat integration
++  HubitatPublish(TasmotaGlobal.mqtt_data);
++
+   if (Settings.flag4.mqtt_no_retain) {                   // SetOption104 - Disable all MQTT retained messages, some brokers don't support it: AWS IoT, Losant
+     retained = false;                                    // Some brokers don't support retained, they will disconnect if received
+   }
+diff --git a/tasmota/xdrv_88_hubitat.ino b/tasmota/xdrv_88_hubitat.ino
+new file mode 100644
+index 000000000..392fd13cb
+--- /dev/null
++++ b/tasmota/xdrv_88_hubitat.ino
+@@ -0,0 +1,187 @@
++/*
++  xdrv_88_hubitat.ino - Hubitat integration for Tasmota devices
++
++  Copyright (C) 2020  John Clark (inindev), Eric Maycock (erocm123)
++
++  Allows for the integration of Tasmota devices directly to the
++  Hubitat Elevation® hub without the need for an MQTT broker.
++
++  This integration was originally conceived and produced by
++  Eric Maycock (erocm123): github.com/erocm123/Sonoff-Tasmota
++
++  The following is a derivative work that modernizes and simplifies
++  Eric's integration strategy to better fit my own needs.  UDP
++  auto-discovery has been removed, and the previous Hubitat drivers
++  and application for Sonoff have been reduced to a single driver:
++  github.com/inindev/hubitat/blob/main/drivers/tasmota_device.groovy
++
++  This program is free software: you can redistribute it and/or modify
++  it under the terms of the GNU General Public License as published by
++  the Free Software Foundation, either version 3 of the License, or
++  (at your option) any later version.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License for more details.
++
++  You should have received a copy of the GNU General Public License
++  along with this program.  If not, see <http://www.gnu.org/licenses/>.
++*/
++
++#define XDRV_88               88
++
++#include <ESP8266HTTPClient.h>
++
++WiFiClient espClient;      // wifi client
++HTTPClient espHttpClient;  // http client
++
++const char kHubitatCommands[] PROGMEM = "|"  // no prefix
++  D_CMND_HUBITATHOST "|" D_CMND_HUBITATPORT;
++
++void (* const HubitatCommand[])(void) PROGMEM = {
++   &CmndHubitatHost, &CmndHubitatPort
++};
++
++/*********************************************************************************************/
++void HubitatInit(void)
++{
++  espHttpClient.begin(espClient, Settings.hubitat_host, Settings.hubitat_port);
++  espHttpClient.setUserAgent(String("Tasmota/") + TasmotaGlobal.version);
++}
++
++/*********************************************************************************************/
++bool HubitatPublish(const char* data)
++{
++  if (!Settings.flag5.hubitat_enabled) {
++    return false;
++  }
++
++  if (!data || data[0] != '{') { // dispatch json messages only
++    return false;
++  }
++
++  espHttpClient.addHeader("Content-Type", "application/json;charset=utf-8");
++  int32_t httpStatus = espHttpClient.POST(reinterpret_cast<const uint8_t*>(data), strlen(data));
++  if(httpStatus < 0) {
++    yield();
++    httpStatus = espHttpClient.POST(reinterpret_cast<const uint8_t*>(data), strlen(data));
++  }
++  if(httpStatus != 200) {
++    if(httpStatus < 0) {
++      AddLog_P(LOG_LEVEL_ERROR, PSTR(D_LOG_HUBITAT "http transport error - %s  host: %s:%d"), espHttpClient.errorToString(httpStatus).c_str(), Settings.hubitat_host, Settings.hubitat_port);
++    } else {
++      AddLog_P(LOG_LEVEL_ERROR, PSTR(D_LOG_HUBITAT "http status error: %d  host: %s:%d"), httpStatus, Settings.hubitat_host, Settings.hubitat_port);
++    }
++    return false;
++  }
++
++  return true;
++}
++
++/*********************************************************************************************\
++ * Presentation
++\*********************************************************************************************/
++
++#ifdef USE_WEBSERVER
++
++#define WEB_HANDLE_HUBITAT "he"
++
++const char HTTP_BTN_MENU_HUBITAT[] PROGMEM =
++  "<p><form action='" WEB_HANDLE_HUBITAT "' method='get'><button>" D_CONFIGURE_HUBITAT "</button></form></p>";
++
++const char HTTP_FORM_HUBITAT[] PROGMEM =
++  "<fieldset><legend><b>&nbsp;" D_HUBITAT_PARAMETERS "&nbsp;</b></legend>"
++  "<form method='get' action='" WEB_HANDLE_HUBITAT "'>"
++  "<p><b>" D_HOST "</b> (" HUBITAT_HOST ")<br><input id='hh' placeholder='" HUBITAT_HOST "' value='%s'></p>"
++  "<p><b>" D_PORT "</b> (" STR(HUBITAT_PORT) ")<br><input id='hp' placeholder='" STR(HUBITAT_PORT) "' value='%s'></p>";
++
++void HandleHubitatConfiguration(void)
++{
++  if (!HttpCheckPriviledgedAccess()) { return; }
++
++  AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_HTTP D_CONFIGURE_HUBITAT));
++
++  if (Webserver->hasArg(F("save"))) {
++    HubitatSaveSettings();
++    WebRestart(1);
++    return;
++  }
++
++  char hubitat_port_string[8] = "";
++  if(Settings.hubitat_port > 0) {
++    itoa(Settings.hubitat_port, hubitat_port_string, 10);
++  }
++
++  WSContentStart_P(PSTR(D_CONFIGURE_HUBITAT));
++  WSContentSendStyle();
++  WSContentSend_P(HTTP_FORM_HUBITAT,
++    Settings.hubitat_host,
++    hubitat_port_string);
++  WSContentSend_P(HTTP_FORM_END);
++  WSContentSpaceButton(BUTTON_CONFIGURATION);
++  WSContentStop();
++}
++
++void HubitatSaveSettings(void)
++{
++  char tmp[TOPSZ];
++  WebGetArg(PSTR("hh"), tmp, sizeof(tmp));
++  strlcpy(Settings.hubitat_host, (!strlen(tmp)) ? PSTR(HUBITAT_HOST) : (!strcmp(tmp,"0")) ? "" : tmp, sizeof(Settings.hubitat_host));
++  WebGetArg(PSTR("hp"), tmp, sizeof(tmp));
++  Settings.hubitat_port = (!strlen(tmp)) ? HUBITAT_PORT : atoi(tmp);
++  AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_HUBITAT D_CMND_HUBITATHOST " %s, " D_CMND_HUBITATPORT " %d"), Settings.hubitat_host, Settings.hubitat_port);
++}
++#endif  // USE_WEBSERVER
++
++/*********************************************************************************************\
++ * Commands
++\*********************************************************************************************/
++
++void CmndHubitatHost(void)
++{
++  if ((XdrvMailbox.data_len > 0) && (XdrvMailbox.data_len < sizeof(Settings.hubitat_host))) {
++    strlcpy(Settings.hubitat_host, (SC_CLEAR == Shortcut()) ? "" : (SC_DEFAULT == Shortcut()) ? HUBITAT_HOST : XdrvMailbox.data, sizeof(Settings.hubitat_host));
++    TasmotaGlobal.restart_flag = 2;
++  }
++  ResponseCmndChar(Settings.hubitat_host);
++}
++
++void CmndHubitatPort(void)
++{
++  if ((XdrvMailbox.payload > 0) && (XdrvMailbox.payload < 65536)) {
++    Settings.hubitat_port = (1 == XdrvMailbox.payload) ? HUBITAT_PORT : XdrvMailbox.payload;
++    TasmotaGlobal.restart_flag = 2;
++  }
++  ResponseCmndNumber(Settings.hubitat_port);
++}
++
++/*********************************************************************************************\
++ * Interface
++\*********************************************************************************************/
++
++bool Xdrv88(uint8_t function)
++{
++  if (!Settings.flag5.hubitat_enabled) return false;
++
++  bool result = false;
++  switch (function) {
++    case FUNC_PRE_INIT:
++      HubitatInit();
++      break;
++    case FUNC_LOOP:
++      break;
++#ifdef USE_WEBSERVER
++    case FUNC_WEB_ADD_BUTTON:
++      WSContentSend_P(HTTP_BTN_MENU_HUBITAT);
++      break;
++    case FUNC_WEB_ADD_HANDLER:
++      WebServer_on(PSTR("/" WEB_HANDLE_HUBITAT), HandleHubitatConfiguration);
++      break;
++#endif  // USE_WEBSERVER
++    case FUNC_COMMAND:
++      result = DecodeCommand(kHubitatCommands, HubitatCommand);
++      break;
++  }
++  return result;
++}
+-- 
+2.20.1
+
