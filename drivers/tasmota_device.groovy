@@ -263,7 +263,7 @@ def createSwitches(int num) {
  */
 def getIndex() {
     if (isRootDevice()) return 0
-    String val = device.name[-1]
+    String val = device.label[-1]
     return val?.isInteger() ? val.toInteger() : -1
 }
 
